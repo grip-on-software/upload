@@ -1,0 +1,12 @@
+# Environment files, editors, OS-specific files, compiled files
+.DS_Store
+*~
+.idea
+*.pyc
+*.swp
+env
+*.cfg
+!.isort.cfg
+*.log
+
+data/

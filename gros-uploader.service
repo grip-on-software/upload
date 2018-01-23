@@ -1,0 +1,20 @@
+[Unit]
+Description=GROS upload service
+After=network.target
+
+[Service]
+Type=forking
+ExecStart=/usr/local/bin/virtualenv.sh /usr/local/envs/controller /usr/local/bin/deployer.py --scgi --port 8143 --daemonize --pidfile /var/log/upload/upload.pid --log-path /var/log/upload --upload-path /home/upload --log DEBUG
+ExecReload=/bin/kill -s HUP $MAINPID
+WorkingDirectory=/home/upload
+KillSignal=SIGTERM
+KillMode=process
+TimeoutStopSec=5
+PIDFile=/var/log/upload/upload.pid
+User=upload
+Group=upload
+Restart=always
+RestartSec=30s
+
+[Install]
+WantedBy=multi-user.target
