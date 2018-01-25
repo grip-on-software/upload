@@ -1,0 +1,7 @@
+[server]
+key = $SERVER_KEY
+engine = $SERVER_ENGINE
+files = $SERVER_FILES
+
+[client]
+$CLIEND_ID=$CLIEND_NAME

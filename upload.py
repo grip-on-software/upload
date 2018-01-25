@@ -3,10 +3,11 @@ Listener server which accepts uploaded PGP-encrypted files.
 """
 
 import argparse
+import configparser
 import io
 import json
 import logging
-import os.path
+import os
 import shutil
 import tempfile
 import cherrypy
@@ -68,7 +69,7 @@ class Upload(object):
 
         # Return our own GPG key
         server_key = io.BytesIO()
-        self._gpg.export(self.args.key, server_key)
+        self._gpg.export(str(self.args.key), server_key)
         return {
             'pubkey': str(server_key.getvalue())
         }
@@ -91,10 +92,13 @@ class Upload(object):
         if not isinstance(files, list):
             files = [files]
 
-        for upload_file in files:
+        for index, upload_file in enumerate(files):
             name = upload_file.filename.split('/')[-1]
             if name == '':
-                raise ValueError('No name provided for file')
+                raise ValueError('No name provided for file #{}'.format(index))
+            if name not in self.args.accepted_files:
+                raise ValueError('File #{}: name {} is unacceptable'.format(index, name))
+
             output_file = self._upload_gpg_file(upload_file.file, name)
 
         return {
@@ -122,6 +126,9 @@ def parse_args():
     Parse command line arguments.
     """
 
+    work_dir = os.getcwd()
+    config = configparser.RawConfigParser()
+    config.read(os.path.join(work_dir, 'upload.cfg'))
     parser = argparse.ArgumentParser(description='Run upload listener')
     parser.add_argument('--debug', action='store_true', default=False,
                         help='Output traces on web')
@@ -129,19 +136,25 @@ def parse_args():
                         help='Bind address (default: 0.0.0.0, 127.0.0.1 in debug')
     parser.add_argument('--port', default=9090, type=int,
                         help='Port to listen to (default: 9090')
-    parser.add_argument('--log-path', dest='log_path', default='.',
+    parser.add_argument('--log-path', dest='log_path', default=work_dir,
                         help='Path to store logs at in production')
     parser.add_argument('--daemonize', action='store_true', default=False,
                         help='Run the server as a daemon')
     parser.add_argument('--pidfile', help='Store process ID in file')
 
     parser.add_argument('--upload-path', dest='upload_path',
-                        default='/home/upload', help='Upload path')
-    parser.add_argument('--engine', default='/usr/bin/gpg2',
+                        default=os.path.join(work_dir, 'upload'),
+                        help='Upload path')
+    parser.add_argument('--accepted-files', dest='accepted_files', nargs='*',
+                        default=config.get('server', 'files').split(' '),
+                        type=set, help='List of filenames allowed for upload')
+    parser.add_argument('--engine', default=config.get('server', 'engine'),
                         help='GPG engine path')
-    parser.add_argument('--key', help='Fingerprint of server key pair')
+    parser.add_argument('--key', default=config.get('server', 'key'),
+                        help='Fingerprint of server key pair')
     parser.add_argument('--accepted-keys', dest='accepted_keys', nargs='*',
-                        help='List of accepted names for public keys')
+                        default=set(dict(config.items('client')).values()),
+                        type=set, help='List of accepted names for public keys')
 
     server = parser.add_mutually_exclusive_group()
     server.add_argument('--fastcgi', action='store_true', default=False,
