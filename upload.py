@@ -3,9 +3,12 @@ Listener server which accepts uploaded PGP-encrypted files.
 """
 
 import argparse
+import io
 import json
 import logging
 import os.path
+import shutil
+import tempfile
 import cherrypy
 import cherrypy.daemon
 import gpgme
@@ -19,6 +22,56 @@ class Upload(object):
     def __init__(self, args):
         self.args = args
         self._gpg = gpgme.Context()
+        self._gpg.armor = True
+
+    @cherrypy.expose
+    @cherrypy.tools.json_in()
+    @cherrypy.tools.json_out()
+    def exchange(self):
+        """
+        Exchange public keys.
+        """
+
+        data = cherrypy.request.json
+        if not isinstance(data, dict):
+            raise ValueError('Must provide a JSON object')
+        if 'pubkey' not in data:
+            raise ValueError('Must provide a pubkey')
+        pubkey = str(data['pubkey'])
+
+        temp_dir = tempfile.mkdtemp()
+        import_gpg = gpgme.Context()
+        import_gpg.set_engine_info(import_gpg.protocol, self.args.engine,
+                                   temp_dir)
+
+        try:
+            result = import_gpg.import_(io.BytesIO(pubkey))
+            if result.considered != 1:
+                raise ValueError('Exactly one public key must be provided')
+            if result.imported != 1:
+                raise ValueError('Given public key must be valid')
+
+            # Validate import source to match expected list
+            try:
+                fpr = result.imports[0][0]
+                key = import_gpg.keylist(fpr).next()
+                if key.uids[0].name not in self.args.accepted_keys:
+                    raise ValueError('Must be an acceptable public key')
+            except (StopIteration, IndexError, AttributeError) as error:
+                raise ValueError('Could not import key: {}'.format(error))
+        finally:
+            # Clean up temporary directory
+            shutil.rmtree(temp_dir)
+
+        # Actual import
+        self._gpg.import_(io.BytesIO(pubkey))
+
+        # Return our own GPG key
+        server_key = io.BytesIO()
+        self._gpg.export(self.args.key, server_key)
+        return {
+            'pubkey': str(server_key.getvalue())
+        }
 
     def _upload_gpg_file(self, input_file, filename):
         path = os.path.join(self.args.upload_path, filename)
@@ -84,6 +137,11 @@ def parse_args():
 
     parser.add_argument('--upload-path', dest='upload_path',
                         default='/home/upload', help='Upload path')
+    parser.add_argument('--engine', default='/usr/bin/gpg2',
+                        help='GPG engine path')
+    parser.add_argument('--key', help='Fingerprint of server key pair')
+    parser.add_argument('--accepted-keys', dest='accepted_keys', nargs='*',
+                        help='List of accepted names for public keys')
 
     server = parser.add_mutually_exclusive_group()
     server.add_argument('--fastcgi', action='store_true', default=False,
