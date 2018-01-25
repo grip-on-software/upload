@@ -138,14 +138,12 @@ class Upload(object):
             }
         })
 
-def parse_args():
+def parse_args(config):
     """
     Parse command line arguments.
     """
 
     work_dir = os.getcwd()
-    config = configparser.RawConfigParser()
-    config.read(os.path.join(work_dir, 'upload.cfg'))
     parser = argparse.ArgumentParser(description='Run upload listener')
     parser.add_argument('--debug', action='store_true', default=False,
                         help='Output traces on web')
@@ -188,13 +186,18 @@ def main():
     Main entry point.
     """
 
-    args = parse_args()
+    config = configparser.RawConfigParser()
+    config.read('upload.cfg')
+    args = parse_args(config)
     if args.listen is not None:
         bind_address = args.listen
     elif args.debug:
         bind_address = '127.0.0.1'
     else:
         bind_address = '0.0.0.0'
+
+    auth = dict((str(key), str(value)) for key, value in config.items('auth'))
+    ha1 = cherrypy.lib.auth_digest.get_ha1_dict_plain(auth)
 
     config = {
         'global': {
@@ -205,7 +208,11 @@ def main():
         },
         '/': {
             'error_page.default': Upload.json_error,
-            'response.headers.server': 'Cherrypy/{}'.format(cherrypy.__version__) if args.debug else 'Cherrypy'
+            'response.headers.server': 'Cherrypy/{}'.format(cherrypy.__version__) if args.debug else 'Cherrypy',
+            'tools.auth_digest.on': True,
+            'tools.auth_digest.realm': 'upload',
+            'tools.auth_digest.get_ha1': ha1,
+            'tools.auth_digest.key': str(config.get('server', 'auth_key'))
         }
     }
     cherrypy.config.update({
