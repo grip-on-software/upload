@@ -25,6 +25,16 @@ class Upload(object):
         self._gpg = gpgme.Context()
         self._gpg.armor = True
 
+    def _get_imported_key(self, import_result, gpg=None):
+        if gpg is None:
+            gpg = self._gpg
+
+        try:
+            fpr = import_result.imports[0][0]
+            return gpg.keylist(fpr).next()
+        except (StopIteration, IndexError, AttributeError) as error:
+            raise ValueError(str(error))
+
     @cherrypy.expose
     @cherrypy.tools.json_in()
     @cherrypy.tools.json_out()
@@ -54,25 +64,32 @@ class Upload(object):
 
             # Validate import source to match expected list
             try:
-                fpr = result.imports[0][0]
-                key = import_gpg.keylist(fpr).next()
+                key = self._get_imported_key(result, gpg=import_gpg)
                 if key.uids[0].name not in self.args.accepted_keys:
                     raise ValueError('Must be an acceptable public key')
-            except (StopIteration, IndexError, AttributeError) as error:
+            except (ValueError, IndexError, AttributeError) as error:
                 raise ValueError('Could not import key: {}'.format(error))
         finally:
             # Clean up temporary directory
             shutil.rmtree(temp_dir)
 
         # Actual import
-        self._gpg.import_(io.BytesIO(pubkey))
+        result = self._gpg.import_(io.BytesIO(pubkey))
+        client_key = self._get_imported_key(result)
 
-        # Return our own GPG key
+        # Retrieve our own GPG key and encrypt it with the client key so that 
+        # it cannot be intercepted by others (and thus others cannot send 
+        # encrypted files in name of the client).
         server_key = io.BytesIO()
         self._gpg.export(str(self.args.key), server_key)
-        return {
-            'pubkey': str(server_key.getvalue())
-        }
+        with io.BytesIO(server_key.getvalue()) as plaintext:
+            with io.BytesIO() as ciphertext:
+                self._gpg.encrypt([client_key], gpgme.ENCRYPT_ALWAYS_TRUST,
+                                  plaintext, ciphertext)
+
+                return {
+                    'pubkey': str(ciphertext.getvalue())
+                }
 
     def _upload_gpg_file(self, input_file, filename):
         path = os.path.join(self.args.upload_path, filename)
