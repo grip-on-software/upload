@@ -12,7 +12,8 @@ import shutil
 import tempfile
 import cherrypy
 import cherrypy.daemon
-import gpgme
+import gpg
+from gpg_exchange import Exchange
 import keyring
 
 class Upload(object):
@@ -30,11 +31,7 @@ class Upload(object):
         else:
             passphrase = None
 
-        try:
-            fpr = import_result.imports[0][0]
-            return gpg.keylist(fpr).next()
-        except (StopIteration, IndexError, AttributeError) as error:
-            raise ValueError(str(error))
+        self._gpg = Exchange(engine_path=self.args.engine, passphrase=passphrase)
 
     def _get_passphrase(self, hint, desc, prev_bad, hook=None):
         return keyring.get_password(self.args.keyring + '-secret', 'privkey')
@@ -55,57 +52,41 @@ class Upload(object):
         pubkey = str(data['pubkey'])
 
         temp_dir = tempfile.mkdtemp()
-        import_gpg = gpgme.Context()
-        import_gpg.set_engine_info(import_gpg.protocol, self.args.engine,
-                                   temp_dir)
-
-        try:
-            result = import_gpg.import_(io.BytesIO(pubkey))
-            if result.considered != 1:
-                raise ValueError('Exactly one public key must be provided')
-            if result.imported != 1:
-                raise ValueError('Given public key must be valid')
-
-            # Validate import source to match expected list
+        with Exchange(home_dir=temp_dir, engine_path=self.args.engine) as import_gpg:
             try:
-                key = self._get_imported_key(result, gpg=import_gpg)
+                key = import_gpg.import_key(pubkey)[0]
+                login = cherrypy.request.login
+                if login != '' and self.config.has_option('client', login):
+                    if key.uids[0].name != self.config.get('client', login):
+                        raise ValueError('Public key must match client')
+
                 if key.uids[0].name not in self.args.accepted_keys:
                     raise ValueError('Must be an acceptable public key')
-            except (ValueError, IndexError, AttributeError) as error:
-                raise ValueError('Could not import key: {}'.format(error))
-        finally:
-            # Clean up temporary directory
-            shutil.rmtree(temp_dir)
+            finally:
+                # Clean up temporary directory
+                shutil.rmtree(temp_dir)
 
         # Actual import
-        result = self._gpg.import_(io.BytesIO(pubkey))
-        client_key = self._get_imported_key(result)
+        client_key = self._gpg.import_key(pubkey)[0]
 
         # Retrieve our own GPG key and encrypt it with the client key so that 
         # it cannot be intercepted by others (and thus others cannot send 
         # encrypted files in name of the client).
-        server_key = io.BytesIO()
-        self._gpg.export(str(self.args.key), server_key)
-        with io.BytesIO(server_key.getvalue()) as plaintext:
-            with io.BytesIO() as ciphertext:
-                self._gpg.encrypt([client_key], gpgme.ENCRYPT_ALWAYS_TRUST,
-                                  plaintext, ciphertext)
+        server_key = self._gpg.export_key(str(self.args.key))
+        ciphertext = self._gpg.encrypt_text(server_key, client_key,
+                                            always_trust=True)
 
-                return {
-                    'pubkey': str(ciphertext.getvalue())
-                }
+        return {
+            'pubkey': ciphertext
+        }
 
     def _upload_gpg_file(self, input_file, filename):
         path = os.path.join(self.args.upload_path, filename)
         with open(path, 'wb') as output_file:
             try:
-                self._gpg.decrypt(input_file, output_file)
-            except gpgme.GpgmeError as error:
-                if error.code == gpgme.ERR_NO_DATA:
-                    raise ValueError('File {} is not encrypted'.format(filename)
-)
-                else:
-                    raise ValueError('File {} could not be decrypted: {}'.format(filename, str(error)))
+                self._gpg.decrypt_file(input_file, output_file)
+            except (gpg.errors.GpgError, ValueError) as error:
+                raise ValueError('File {} could not be decrypted: {}'.format(filename, str(error)))
 
     @cherrypy.expose
     @cherrypy.tools.json_out()
@@ -182,6 +163,8 @@ def parse_args(config):
     parser.add_argument('--accepted-keys', dest='accepted_keys', nargs='*',
                         default=set(dict(config.items('client')).values()),
                         type=set, help='List of accepted names for public keys')
+    parser.add_argument('--loopback', action='store_true',
+                        help='Use loopback pinhole to read passphrase from keyring')
 
     server = parser.add_mutually_exclusive_group()
     server.add_argument('--fastcgi', action='store_true', default=False,
