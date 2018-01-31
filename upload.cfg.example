@@ -2,6 +2,9 @@
 key = $SERVER_KEY
 engine = $SERVER_ENGINE
 files = $SERVER_FILES
+secret = $SERVER_SECRET
+keyring = $SERVER_KEYRING
+realm = $SERVER_REALM
 
 [client]
 $CLIENT_ID=$CLIENT_NAME

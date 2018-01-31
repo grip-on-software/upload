@@ -13,6 +13,7 @@ import tempfile
 import cherrypy
 import cherrypy.daemon
 import gpgme
+import keyring
 
 class Upload(object):
     # pylint: disable=no-self-use
@@ -20,20 +21,23 @@ class Upload(object):
     Upload listener.
     """
 
-    def __init__(self, args):
+    def __init__(self, args, config):
         self.args = args
-        self._gpg = gpgme.Context()
-        self._gpg.armor = True
+        self.config = config
 
-    def _get_imported_key(self, import_result, gpg=None):
-        if gpg is None:
-            gpg = self._gpg
+        if self.args.keyring and self.args.loopback:
+            passphrase = self._get_passphrase
+        else:
+            passphrase = None
 
         try:
             fpr = import_result.imports[0][0]
             return gpg.keylist(fpr).next()
         except (StopIteration, IndexError, AttributeError) as error:
             raise ValueError(str(error))
+
+    def _get_passphrase(self, hint, desc, prev_bad, hook=None):
+        return keyring.get_password(self.args.keyring + '-secret', 'privkey')
 
     @cherrypy.expose
     @cherrypy.tools.json_in()
@@ -116,7 +120,7 @@ class Upload(object):
             if name not in self.args.accepted_files:
                 raise ValueError('File #{}: name {} is unacceptable'.format(index, name))
 
-            output_file = self._upload_gpg_file(upload_file.file, name)
+            self._upload_gpg_file(upload_file.file, name)
 
         return {
             'success': True
@@ -138,6 +142,12 @@ class Upload(object):
             }
         })
 
+def get_ha1_keyring(name):
+    def get_ha1(realm, username):
+        return str(keyring.get_password(name, username))
+
+    return get_ha1
+
 def parse_args(config):
     """
     Parse command line arguments.
@@ -157,16 +167,18 @@ def parse_args(config):
                         help='Run the server as a daemon')
     parser.add_argument('--pidfile', help='Store process ID in file')
 
+    parser.add_argument('--engine', default=config.get('server', 'engine'),
+                        help='GPG engine path')
     parser.add_argument('--upload-path', dest='upload_path',
                         default=os.path.join(work_dir, 'upload'),
                         help='Upload path')
     parser.add_argument('--accepted-files', dest='accepted_files', nargs='*',
                         default=config.get('server', 'files').split(' '),
                         type=set, help='List of filenames allowed for upload')
-    parser.add_argument('--engine', default=config.get('server', 'engine'),
-                        help='GPG engine path')
     parser.add_argument('--key', default=config.get('server', 'key'),
                         help='Fingerprint of server key pair')
+    parser.add_argument('--keyring', default=config.get('server', 'keyring'),
+                        help='Name of keyring containing authentication')
     parser.add_argument('--accepted-keys', dest='accepted_keys', nargs='*',
                         default=set(dict(config.items('client')).values()),
                         type=set, help='List of accepted names for public keys')
@@ -196,10 +208,18 @@ def main():
     else:
         bind_address = '0.0.0.0'
 
-    auth = dict((str(key), str(value)) for key, value in config.items('auth'))
-    ha1 = cherrypy.lib.auth_digest.get_ha1_dict_plain(auth)
+    if args.keyring:
+        auth_key = keyring.get_password(args.keyring + '-secret', 'server')
+        if auth_key is None:
+            raise ValueError('No server secret auth key found in keyring')
 
-    config = {
+        ha1 = get_ha1_keyring(args.keyring)
+    else:
+        auth_key = config.get('server', 'auth_key')
+        auth = dict((str(key), str(value)) for key, value in config.items('auth'))
+        ha1 = cherrypy.lib.auth_digest.get_ha1_dict_plain(auth)
+
+    conf = {
         'global': {
             'request.show_tracebacks': args.debug,
             'log.screen': args.debug,
@@ -212,7 +232,7 @@ def main():
             'tools.auth_digest.on': True,
             'tools.auth_digest.realm': 'upload',
             'tools.auth_digest.get_ha1': ha1,
-            'tools.auth_digest.key': str(config.get('server', 'auth_key'))
+            'tools.auth_digest.key': str(auth_key)
         }
     }
     cherrypy.config.update({
@@ -221,7 +241,7 @@ def main():
     })
 
     # Start the application and server daemon.
-    cherrypy.tree.mount(Upload(args), '/upload', config)
+    cherrypy.tree.mount(Upload(args, config), '/upload', conf)
     cherrypy.daemon.start(daemonize=args.daemonize, pidfile=args.pidfile,
                           fastcgi=args.fastcgi, scgi=args.scgi, cgi=args.cgi)
 
