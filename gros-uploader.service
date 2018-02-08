@@ -3,18 +3,15 @@ Description=GROS upload service
 After=network.target
 
 [Service]
-Type=forking
-ExecStart=/usr/local/bin/virtualenv.sh /usr/local/envs/controller /usr/local/bin/upload.py --scgi --port 8143 --daemonize --pidfile /var/log/upload/upload.pid --log-path /var/log/upload --upload-path /home/upload/upload --log DEBUG
-ExecReload=/bin/kill -s HUP $MAINPID
+Type=simple
+PAMName=upload
+ExecStart=/bin/bash -ce 'systemd-ask-password "Password for gros-uploader keyring:" | su -s /bin/bash upload /usr/local/bin/upload-session.sh'
+ExecReload=/bin/bash -ce "/bin/kill -s HUP $(cat /var/log/upload/upload.pid)"
+ExecStop=/bin/bash -ce "/bin/kill -s TERM $(cat /var/log/upload/upload.pid)"
 WorkingDirectory=/home/upload
 KillSignal=SIGTERM
-KillMode=process
+KillMode=control-group
 TimeoutStopSec=5
-PIDFile=/var/log/upload/upload.pid
-User=upload
-Group=upload
-Restart=always
-RestartSec=30s
 
 [Install]
 WantedBy=multi-user.target

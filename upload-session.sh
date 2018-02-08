@@ -1,0 +1,1 @@
+/usr/bin/dbus-run-session -- bash -ce "eval \$(cat | gnome-keyring-daemon --unlock); /usr/local/bin/virtualenv.sh /usr/local/envs/controller /usr/local/bin/upload.py --scgi --debug --listen 127.0.0.1 --port 8143 --pidfile /var/log/upload/upload.pid --log-path /var/log/upload --upload-path /home/upload/upload --loopback"

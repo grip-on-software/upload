@@ -1,3 +1,4 @@
 configparser
 cherrypy
 gpg_exchange
+keyring

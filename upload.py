@@ -204,10 +204,6 @@ def main():
 
     conf = {
         'global': {
-            'request.show_tracebacks': args.debug,
-            'log.screen': args.debug,
-            'log.access_file': '' if args.debug else os.path.join(args.log_path, 'access.log'),
-            'log.error_file': '' if args.debug else os.path.join(args.log_path, 'error.log'),
         },
         '/': {
             'error_page.default': Upload.json_error,
@@ -220,7 +216,11 @@ def main():
     }
     cherrypy.config.update({
         'server.socket_host': bind_address,
-        'server.socket_port': args.port
+        'server.socket_port': args.port,
+        'request.show_tracebacks': args.debug,
+        'log.screen': args.debug,
+        'log.access_file': '' if args.debug else os.path.join(args.log_path, 'access.log'),
+        'log.error_file': '' if args.debug else os.path.join(args.log_path, 'error.log'),
     })
 
     # Start the application and server daemon.
