@@ -4,6 +4,7 @@ Listener server which accepts uploaded PGP-encrypted files.
 
 import argparse
 import configparser
+import datetime
 from hashlib import md5
 import io
 import json
@@ -81,8 +82,8 @@ class Upload(object):
             'pubkey': str(ciphertext)
         }
 
-    def _upload_gpg_file(self, input_file, filename):
-        path = os.path.join(self.args.upload_path, filename)
+    def _upload_gpg_file(self, input_file, directory, filename):
+        path = os.path.join(directory, filename)
         with open(path, 'wb') as output_file:
             try:
                 self._gpg.decrypt_file(input_file, output_file)
@@ -95,6 +96,12 @@ class Upload(object):
         if not isinstance(files, list):
             files = [files]
 
+        login = cherrypy.request.login
+        date = datetime.datetime.now().strftime('%Y-%m-%d')
+        directory = os.path.join(self.args.upload_path, login, date)
+        if not os.path.exists(directory):
+            os.makedirs(directory, 0770)
+
         for index, upload_file in enumerate(files):
             name = upload_file.filename.split('/')[-1]
             if name == '':
@@ -102,7 +109,7 @@ class Upload(object):
             if name not in self.args.accepted_files:
                 raise ValueError('File #{}: name {} is unacceptable'.format(index, name))
 
-            self._upload_gpg_file(upload_file.file, name)
+            self._upload_gpg_file(upload_file.file, directory, name)
 
         return {
             'success': True
