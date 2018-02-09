@@ -4,6 +4,7 @@ Listener server which accepts uploaded PGP-encrypted files.
 
 import argparse
 import configparser
+from hashlib import md5
 import io
 import json
 import logging
@@ -129,6 +130,20 @@ def get_ha1_keyring(name):
 
     return get_ha1
 
+def md5_hex(nonce):
+    """
+    Encode as MD5.
+    """
+
+    return md5(nonce.encode('ISO-8859-1')).hexdigest()
+
+def ha1_nonce(username, realm, password):
+    """
+    Create an encoded variant for the user's password in the realm.
+    """
+
+    return md5_hex('%s:%s:%s' % (username, realm, password))
+
 def parse_args(config):
     """
     Parse command line arguments.
@@ -148,20 +163,22 @@ def parse_args(config):
                         help='Run the server as a daemon')
     parser.add_argument('--pidfile', help='Store process ID in file')
 
-    parser.add_argument('--engine', default=config.get('server', 'engine'),
+    parser.add_argument('--engine', default=config['server']['engine'],
                         help='GPG engine path')
     parser.add_argument('--upload-path', dest='upload_path',
                         default=os.path.join(work_dir, 'upload'),
                         help='Upload path')
     parser.add_argument('--accepted-files', dest='accepted_files', nargs='*',
-                        default=config.get('server', 'files').split(' '),
+                        default=config['server']['files'].split(' '),
                         type=set, help='List of filenames allowed for upload')
-    parser.add_argument('--key', default=config.get('server', 'key'),
+    parser.add_argument('--key', default=config['server']['key'],
                         help='Fingerprint of server key pair')
-    parser.add_argument('--keyring', default=config.get('server', 'keyring'),
+    parser.add_argument('--keyring', default=config['server']['keyring'],
                         help='Name of keyring containing authentication')
+    parser.add_argument('--realm', default=config['server']['realm'],
+                        help='Name of Digest authentication realm')
     parser.add_argument('--accepted-keys', dest='accepted_keys', nargs='*',
-                        default=set(dict(config.items('client')).values()),
+                        default=set(config['client'].values()),
                         type=set, help='List of accepted names for public keys')
     parser.add_argument('--loopback', action='store_true',
                         help='Use loopback pinhole to read passphrase from keyring')
@@ -191,15 +208,23 @@ def main():
     else:
         bind_address = '0.0.0.0'
 
+    auth_key = config['server'].get('secret', '')
+    auth = dict((str(key), str(value)) for key, value in config['auth'].items())
     if args.keyring:
-        auth_key = keyring.get_password(args.keyring + '-secret', 'server')
-        if auth_key is None:
-            raise ValueError('No server secret auth key found in keyring')
+        auth_keyring = keyring.get_password(args.keyring + '-secret', 'server')
+        if auth_keyring is not None:
+            auth_key = auth_keyring
+        elif auth_key != '':
+            keyring.set_password(args.keyring + '-secret', 'server', auth_key)
+        else:
+            raise ValueError('No server secret auth key provided')
+
+        for user, password in auth.items():
+            keyring.set_password(args.keyring, user,
+                                 ha1_nonce(user, args.realm, password))
 
         ha1 = get_ha1_keyring(args.keyring)
     else:
-        auth_key = config.get('server', 'auth_key')
-        auth = dict((str(key), str(value)) for key, value in config.items('auth'))
         ha1 = cherrypy.lib.auth_digest.get_ha1_dict_plain(auth)
 
     conf = {
@@ -209,7 +234,7 @@ def main():
             'error_page.default': Upload.json_error,
             'response.headers.server': 'Cherrypy/{}'.format(cherrypy.__version__) if args.debug else 'Cherrypy',
             'tools.auth_digest.on': True,
-            'tools.auth_digest.realm': 'upload',
+            'tools.auth_digest.realm': args.realm,
             'tools.auth_digest.get_ha1': ha1,
             'tools.auth_digest.key': str(auth_key)
         }
