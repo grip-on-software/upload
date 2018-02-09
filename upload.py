@@ -78,7 +78,7 @@ class Upload(object):
                                             always_trust=True)
 
         return {
-            'pubkey': ciphertext
+            'pubkey': str(ciphertext)
         }
 
     def _upload_gpg_file(self, input_file, filename):
@@ -234,7 +234,7 @@ def main():
             'error_page.default': Upload.json_error,
             'response.headers.server': 'Cherrypy/{}'.format(cherrypy.__version__) if args.debug else 'Cherrypy',
             'tools.auth_digest.on': True,
-            'tools.auth_digest.realm': args.realm,
+            'tools.auth_digest.realm': str(args.realm),
             'tools.auth_digest.get_ha1': ha1,
             'tools.auth_digest.key': str(auth_key)
         }
