@@ -24,6 +24,9 @@ class Upload(object):
     Upload listener.
     """
 
+    PGP_ARMOR_MIME = "application/pgp-encrypted"
+    PGP_BINARY_MIME = "application/x-pgp-encrypted-binary"
+
     def __init__(self, args, config):
         self.args = args
         self.config = config
@@ -82,11 +85,11 @@ class Upload(object):
             'pubkey': str(ciphertext)
         }
 
-    def _upload_gpg_file(self, input_file, directory, filename):
+    def _upload_gpg_file(self, input_file, directory, filename, binary):
         path = os.path.join(directory, filename)
         with open(path, 'wb') as output_file:
             try:
-                self._gpg.decrypt_file(input_file, output_file)
+                self._gpg.decrypt_file(input_file, output_file, armor=binary)
             except (gpg.errors.GpgError, ValueError) as error:
                 raise ValueError('File {} could not be decrypted: {}'.format(filename, str(error)))
 
@@ -109,7 +112,14 @@ class Upload(object):
             if name not in self.args.accepted_files:
                 raise ValueError('File #{}: name {} is unacceptable'.format(index, name))
 
-            self._upload_gpg_file(upload_file.file, directory, name)
+            if upload_file.content_type == self.PGP_ARMOR_MIME:
+                binary = False
+            elif upload_file.content_type == self.PGP_BINARY_MIME:
+                binary = True
+            else:
+                binary = None
+
+            self._upload_gpg_file(upload_file.file, directory, name, binary)
 
         return {
             'success': True
