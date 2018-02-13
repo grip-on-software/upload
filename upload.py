@@ -112,9 +112,9 @@ class Upload(object):
             if name not in self.args.accepted_files:
                 raise ValueError('File #{}: name {} is unacceptable'.format(index, name))
 
-            if upload_file.content_type == self.PGP_ARMOR_MIME:
+            if upload_file.content_type.value == self.PGP_ARMOR_MIME:
                 binary = False
-            elif upload_file.content_type == self.PGP_BINARY_MIME:
+            elif upload_file.content_type.value == self.PGP_BINARY_MIME:
                 binary = True
             else:
                 binary = None
@@ -257,6 +257,7 @@ def main():
         }
     }
     cherrypy.config.update({
+        'server.max_request_body_size': 1000 * 1024 * 1024,
         'server.socket_host': bind_address,
         'server.socket_port': args.port,
         'request.show_tracebacks': args.debug,
