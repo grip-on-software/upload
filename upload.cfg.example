@@ -6,6 +6,12 @@ secret = $SERVER_SECRET
 keyring = $SERVER_KEYRING
 realm = $SERVER_REALM
 
+[import]
+database = $IMPORT_DATABASE
+dump = $IMPORT_DUMP
+path = $IMPORT_PATH
+script = $IMPORT_SCRIPT
+
 [client]
 $CLIENT_ID=$CLIENT_NAME
 

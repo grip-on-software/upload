@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import shutil
+from subprocess import Popen
 import tempfile
 import cherrypy
 import cherrypy.daemon
@@ -120,6 +121,13 @@ class Upload(object):
                 binary = None
 
             self._upload_gpg_file(upload_file.file, directory, name, binary)
+            if name == self.args.import_dump:
+                process_args = [
+                    '/bin/bash', self.args.import_script, login, date,
+                    self.args.database
+                ]
+                Popen(process_args, stdout=None, stderr=None,
+                      cwd=os.path.join(self.args.import_path, 'Scripts'))
 
         return {
             'success': True
@@ -188,6 +196,14 @@ def parse_args(config):
     parser.add_argument('--accepted-files', dest='accepted_files', nargs='*',
                         default=config['server']['files'].split(' '),
                         type=set, help='List of filenames allowed for upload')
+    parser.add_argument('--database', default=config['import']['database'],
+                        help='Database host to import dumps into')
+    parser.add_argument('--import-dump', default=config['import']['dump'],
+                        dest='import_dump', help='File to import to a database')
+    parser.add_argument('--import-path', default=config['import']['path'],
+                        dest='import_path', help='Path to the MonetDB importer')
+    parser.add_argument('--import-script', default=config['import']['script'],
+                        dest='import_script', help='Path to the import script')
     parser.add_argument('--key', default=config['server']['key'],
                         help='Fingerprint of server key pair')
     parser.add_argument('--keyring', default=config['server']['keyring'],
