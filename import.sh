@@ -22,8 +22,10 @@ DB="gros_$ORGANIZATION"
 
 python "$IMPORTER/Scripts/recreate_database.py" --force --no-table-import --no-schema --keep-jenkins -h "$HOST" -d "$DB"
 
-tar xzf "$DIRECTORY/dump.tar.gz"
+if [ ! -d "$DIRECTORY/dump" ]; then
+	tar xzf --no-same-owner --no-same-permissions "$DIRECTORY/dump.tar.gz"
+fi
 
-"$IMPORTER/Scripts/import_tables.sh" "$HOST" "$DIRECTORY/dump" "$DB"
+"$IMPORTER/Scripts/import_tables.sh" "$HOST" "$DIRECTORY/dump/gros-$DATE" "$DB"
 
 rm -rf "$DIRECTORY/dump"
