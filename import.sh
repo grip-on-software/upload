@@ -12,9 +12,9 @@ fi
 
 IMPORTER="/srv/deploy/monetdb-import"
 
-PATH="$HOME/upload/$ORGANIZATION/$DATE"
+DIRECTORY="$HOME/upload/$ORGANIZATION/$DATE"
 DB="gros_$ORGANIZATION"
 
 python "$IMPORTER/Scripts/recreate_database.py" --force --no-table-import --no-schema --keep-jenkins -h "$HOST"
 
-"$IMPORTER/Scripts/import_tables.sh" "$HOST" "$PATH" "$DB"
+"$IMPORTER/Scripts/import_tables.sh" "$DIRECTORY" "$PATH" "$DB"
