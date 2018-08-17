@@ -6,9 +6,7 @@ import argparse
 import configparser
 import datetime
 from hashlib import md5
-import io
 import json
-import logging
 import os
 import shutil
 from subprocess import Popen
@@ -75,8 +73,8 @@ class Upload(object):
         # Actual import
         client_key = self._gpg.import_key(pubkey)[0]
 
-        # Retrieve our own GPG key and encrypt it with the client key so that 
-        # it cannot be intercepted by others (and thus others cannot send 
+        # Retrieve our own GPG key and encrypt it with the client key so that
+        # it cannot be intercepted by others (and thus others cannot send
         # encrypted files in name of the client).
         server_key = self._gpg.export_key(str(self.args.key))
         ciphertext = self._gpg.encrypt_text(server_key, client_key,
@@ -97,6 +95,11 @@ class Upload(object):
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def upload(self, files):
+        """
+        Perform an upload and import of GPG-encrypted files from a client
+        which has performed a key exchange.
+        """
+
         if not isinstance(files, list):
             files = [files]
 
@@ -104,7 +107,7 @@ class Upload(object):
         date = datetime.datetime.now().strftime('%Y-%m-%d')
         directory = os.path.join(self.args.upload_path, login, date)
         if not os.path.exists(directory):
-            os.makedirs(directory, 0770)
+            os.makedirs(directory, 0o770)
 
         for index, upload_file in enumerate(files):
             name = upload_file.filename.split('/')[-1]
