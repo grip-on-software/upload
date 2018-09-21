@@ -81,7 +81,7 @@ class Upload(object):
                                             always_trust=True)
 
         return {
-            'pubkey': str(ciphertext)
+            'pubkey': str(ciphertext.decode('utf-8'))
         }
 
     def _upload_gpg_file(self, input_file, directory, filename, binary):
