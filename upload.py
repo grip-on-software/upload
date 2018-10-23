@@ -25,6 +25,7 @@ class Upload(object):
 
     PGP_ARMOR_MIME = "application/pgp-encrypted"
     PGP_BINARY_MIME = "application/x-pgp-encrypted-binary"
+    PGP_ENCRYPT_SUFFIX = ".gpg"
 
     def __init__(self, args, config):
         self.args = args
@@ -84,7 +85,8 @@ class Upload(object):
             'pubkey': str(ciphertext.decode('utf-8'))
         }
 
-    def _upload_gpg_file(self, input_file, directory, filename, binary):
+    def _upload_gpg_file(self, input_file, directory, filename,
+                         binary=None, passphrase=None):
         path = os.path.join(directory, filename)
         with open(path, 'wb') as output_file:
             try:
@@ -111,8 +113,19 @@ class Upload(object):
 
         for index, upload_file in enumerate(files):
             name = upload_file.filename.split('/')[-1]
+            passphrase = None
+            binary = None
+
             if name == '':
                 raise ValueError('No name provided for file #{}'.format(index))
+            if name.endswith(self.PGP_ENCRYPT_SUFFIX):
+                name = name[:-len(self.PGP_ENCRYPT_SUFFIX)]
+                if self.args.keyring:
+                    passphrase = \
+                        keyring.get_password(self.args.keyring + '-symmetric',
+                                             login)
+                else:
+                    passphrase = self.config['symm'][login]
             if name not in self.args.accepted_files:
                 raise ValueError('File #{}: name {} is unacceptable'.format(index, name))
 
@@ -120,10 +133,9 @@ class Upload(object):
                 binary = False
             elif upload_file.content_type.value == self.PGP_BINARY_MIME:
                 binary = True
-            else:
-                binary = None
 
-            self._upload_gpg_file(upload_file.file, directory, name, binary)
+            self._upload_gpg_file(upload_file.file, directory, name,
+                                  binary=binary, passphrase=passphrase)
             if name == self.args.import_dump:
                 process_args = [
                     '/bin/bash', self.args.import_script, login, date,
@@ -246,6 +258,7 @@ def main():
 
     auth_key = config['server'].get('secret', '')
     auth = dict((str(key), str(value)) for key, value in config['auth'].items())
+    symm = dict((str(key), str(value)) for key, value in config['symm'].items())
     if args.keyring:
         auth_keyring = keyring.get_password(args.keyring + '-secret', 'server')
         if auth_keyring is not None:
@@ -258,6 +271,8 @@ def main():
         for user, password in auth.items():
             keyring.set_password(args.keyring, user,
                                  ha1_nonce(user, args.realm, password))
+        for user, passphrase in symm.items():
+            keyring.set_password(args.keyring + '-symmetric', user, passphrase)
 
         ha1 = get_ha1_keyring(args.keyring)
     else:
