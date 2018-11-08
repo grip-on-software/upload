@@ -17,11 +17,13 @@ import gpg
 from gpg_exchange import Exchange
 import keyring
 
-class Upload(object):
+class Upload:
     # pylint: disable=no-self-use
     """
     Upload listener.
     """
+
+    VERSION = "1"
 
     PGP_ARMOR_MIME = "application/pgp-encrypted"
     PGP_BINARY_MIME = "application/x-pgp-encrypted-binary"
@@ -39,6 +41,7 @@ class Upload(object):
         self._gpg = Exchange(engine_path=self.args.engine, passphrase=passphrase)
 
     def _get_passphrase(self, hint, desc, prev_bad, hook=None):
+        # pylint: disable=unused-argument
         return keyring.get_password(self.args.keyring + '-secret', 'privkey')
 
     @cherrypy.expose
@@ -173,11 +176,25 @@ class Upload(object):
                 'status': status,
                 'message': message,
                 'traceback': traceback if cherrypy.request.show_tracebacks else None
-            }
+            },
+            'version': {
+                'upload': cls.VERSION,
+                'cherrypy': version
+            } if cherrypy.request.show_tracebacks else None
         })
 
 def get_ha1_keyring(name):
-    def get_ha1(realm, username):
+    """
+    Retrieve a function that provides an encoded variable containing the
+    username, realm and password for digest authentication. The `name` is
+    the keyring collection name.
+    """
+
+    def get_ha1(_, username):
+        """
+        Retrieve the HA1 variable for a username from the keyring.
+        """
+
         return str(keyring.get_password(name, username))
 
     return get_ha1
@@ -290,12 +307,17 @@ def main():
     else:
         ha1 = cherrypy.lib.auth_digest.get_ha1_dict_plain(auth)
 
+    if args.debug:
+        server = 'Cherrypy/{}'.format(cherrypy.__version__)
+    else:
+        server = 'Cherrypy'
+
     conf = {
         'global': {
         },
         '/': {
             'error_page.default': Upload.json_error,
-            'response.headers.server': 'Cherrypy/{}'.format(cherrypy.__version__) if args.debug else 'Cherrypy',
+            'response.headers.server': server,
             'tools.auth_digest.on': True,
             'tools.auth_digest.realm': str(args.realm),
             'tools.auth_digest.get_ha1': ha1,
