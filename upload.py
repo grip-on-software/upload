@@ -85,14 +85,22 @@ class Upload(object):
             'pubkey': str(ciphertext.decode('utf-8'))
         }
 
-    def _upload_gpg_file(self, input_file, directory, filename,
-                         binary=None, passphrase=None):
-        path = os.path.join(directory, filename)
-        with open(path, 'wb') as output_file:
-            try:
-                self._gpg.decrypt_file(input_file, output_file, armor=binary)
-            except (gpg.errors.GpgError, ValueError) as error:
-                raise ValueError('File {} could not be decrypted: {}'.format(filename, str(error)))
+    def _upload_gpg_file(self, input_file, path, binary=None, passphrase=None):
+        try:
+            with open(path, 'wb') as output_file:
+                self._gpg.decrypt_file(input_file, output_file,
+                                       armor=binary, passphrase=passphrase)
+        except (gpg.errors.GpgError, ValueError) as error:
+            # Write the (possibly encrypted) data to a separate file
+            with open("{}.enc".format(path), 'wb') as output_file:
+                input_file.seek(0)
+                buf = True
+                while buf:
+                    buf = input_file.read(1024)
+                    if buf:
+                        output_file.write(buf)
+
+            raise ValueError('Decryption failed: {}'.format(str(error)))
 
     @cherrypy.expose
     @cherrypy.tools.json_out()
@@ -134,8 +142,12 @@ class Upload(object):
             elif upload_file.content_type.value == self.PGP_BINARY_MIME:
                 binary = True
 
-            self._upload_gpg_file(upload_file.file, directory, name,
-                                  binary=binary, passphrase=passphrase)
+            try:
+                path = os.path.join(directory, name)
+                self._upload_gpg_file(upload_file.file, path,
+                                      binary=binary, passphrase=passphrase)
+            except ValueError as error:
+                raise ValueError('File {}: {}'.format(name, str(error)))
             if name == self.args.import_dump:
                 process_args = [
                     '/bin/bash', self.args.import_script, login, date,

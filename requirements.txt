@@ -1,4 +1,4 @@
 configparser
 cherrypy
-gpg_exchange>=0.0.5
+gpg_exchange>=0.0.7
 keyring
