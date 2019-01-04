@@ -10,6 +10,7 @@ else
 	HOST="localhost"
 fi
 
+SCHEMA="/srv/schema"
 IMPORTER="/srv/deploy/monetdb-import"
 DIRECTORY="$HOME/upload/$ORGANIZATION/$DATE"
 
@@ -27,5 +28,8 @@ if [ ! -d "$DIRECTORY/dump" ]; then
 fi
 
 "$IMPORTER/Scripts/import_tables.sh" "$HOST" "$DIRECTORY/dump/gros-$DATE" "$DB"
+
+cp "$DIRECTORY/dump/tables-documentation.json" $SCHEMA
+cp "$DIRECTORY/dump/tables-schema.json" $SCHEMA
 
 rm -rf "$DIRECTORY/dump"
