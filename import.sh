@@ -1,4 +1,5 @@
-#!/bin/bash -e
+#!/bin/bash
+set -e
 
 ORGANIZATION=$1
 shift
@@ -20,16 +21,24 @@ if [ ! -f "$DIRECTORY/dump.tar.gz" ]; then
 fi
 
 DB="gros_$ORGANIZATION"
+cd "$IMPORTER/Scripts"
 
-python "$IMPORTER/Scripts/recreate_database.py" --force --no-table-import --no-schema --keep-jenkins -h "$HOST" -d "$DB"
+python "recreate_database.py" --force --no-table-import --no-schema --keep-jenkins -h "$HOST" -d "$DB"
 
 if [ ! -d "$DIRECTORY/dump" ]; then
 	tar --directory "$DIRECTORY" --no-same-owner --no-same-permissions -xzf "$DIRECTORY/dump.tar.gz"
 fi
 
-"$IMPORTER/Scripts/import_tables.sh" "$HOST" "$DIRECTORY/dump/gros-$DATE" "$DB"
+set +e
+"./import_tables.sh" "$HOST" "$DIRECTORY/dump/gros-$DATE" "$DB"
+status=$?
+set -e
+if [ $status -ne 0 ]; then
+	echo "Failed to import all tables correctly" >&2
+fi
 
 cp "$DIRECTORY/dump/tables-documentation.json" $SCHEMA
 cp "$DIRECTORY/dump/tables-schema.json" $SCHEMA
 
 rm -rf "$DIRECTORY/dump"
+exit $status
