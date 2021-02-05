@@ -35,6 +35,8 @@ status=$?
 set -e
 if [ $status -ne 0 ]; then
 	echo "Failed to import all tables correctly" >&2
+else
+	python "update_database.py" -h "$HOST" -d "$DB"
 fi
 
 cp "$DIRECTORY/dump/tables-documentation.json" $SCHEMA
