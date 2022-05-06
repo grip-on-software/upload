@@ -1,5 +1,20 @@
 """
 Listener server which accepts uploaded PGP-encrypted files.
+
+Copyright 2017-2020 ICTU
+Copyright 2017-2022 Leiden University
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 """
 
 import argparse
@@ -7,7 +22,7 @@ import configparser
 import datetime
 from hashlib import md5
 import json
-import os
+from pathlib import Path
 import shutil
 from subprocess import Popen
 import tempfile
@@ -95,7 +110,7 @@ class Upload:
                                        armor=binary, passphrase=passphrase)
         except (gpg.errors.GpgError, ValueError) as error:
             # Write the (possibly encrypted) data to a separate file
-            with open("{}.enc".format(path), 'wb') as output_file:
+            with open(f"{path}.enc", 'wb') as output_file:
                 input_file.seek(0)
                 buf = True
                 while buf:
@@ -103,7 +118,7 @@ class Upload:
                     if buf:
                         output_file.write(buf)
 
-            raise ValueError('Decryption failed: {}'.format(str(error)))
+            raise ValueError(f'Decryption failed: {error}') from error
 
     @cherrypy.expose
     @cherrypy.tools.json_out()
@@ -118,9 +133,9 @@ class Upload:
 
         login = cherrypy.request.login
         date = datetime.datetime.now().strftime('%Y-%m-%d')
-        directory = os.path.join(self.args.upload_path, login, date)
-        if not os.path.exists(directory):
-            os.makedirs(directory, 0o770)
+        directory = Path(self.args.upload_path) / login / date
+        if not directory.exists():
+            directory.mkdir(mode=0o770, parents=True)
 
         for index, upload_file in enumerate(files):
             name = upload_file.filename.split('/')[-1]
@@ -128,7 +143,7 @@ class Upload:
             binary = None
 
             if name == '':
-                raise ValueError('No name provided for file #{}'.format(index))
+                raise ValueError(f'No name provided for file #{index}')
             if name.endswith(self.PGP_ENCRYPT_SUFFIX):
                 name = name[:-len(self.PGP_ENCRYPT_SUFFIX)]
                 if self.args.keyring:
@@ -138,7 +153,7 @@ class Upload:
                 else:
                     passphrase = self.config['symm'][login]
             if name not in self.args.accepted_files:
-                raise ValueError('File #{}: name {} is unacceptable'.format(index, name))
+                raise ValueError(f'File #{index}: name {name} is unacceptable')
 
             if upload_file.content_type.value == self.PGP_ARMOR_MIME:
                 binary = False
@@ -146,18 +161,18 @@ class Upload:
                 binary = True
 
             try:
-                path = os.path.join(directory, name)
-                self._upload_gpg_file(upload_file.file, path,
+                self._upload_gpg_file(upload_file.file, directory / name,
                                       binary=binary, passphrase=passphrase)
             except ValueError as error:
-                raise ValueError('File {}: {}'.format(name, str(error)))
+                raise ValueError(f'File {name}: {error}') from error
             if name == self.args.import_dump:
                 process_args = [
                     '/bin/bash', self.args.import_script, login, date,
                     self.args.database
                 ]
-                Popen(process_args, stdout=None, stderr=None,
-                      cwd=os.path.join(self.args.import_path, 'Scripts'))
+                path = Path(self.args.import_path) / 'Scripts'
+                with Popen(process_args, stdout=None, stderr=None, cwd=path):
+                    pass
 
         return {
             'success': True
@@ -211,14 +226,14 @@ def ha1_nonce(username, realm, password):
     Create an encoded variant for the user's password in the realm.
     """
 
-    return md5_hex('%s:%s:%s' % (username, realm, password))
+    return md5_hex(f'{username}:{realm}:{password}')
 
 def parse_args(config):
     """
     Parse command line arguments.
     """
 
-    work_dir = os.getcwd()
+    work_dir = Path.cwd()
     parser = argparse.ArgumentParser(description='Run upload listener')
     parser.add_argument('--debug', action='store_true', default=False,
                         help='Output traces on web')
@@ -226,7 +241,7 @@ def parse_args(config):
                         help='Bind address (default: 0.0.0.0, 127.0.0.1 in debug')
     parser.add_argument('--port', default=9090, type=int,
                         help='Port to listen to (default: 9090')
-    parser.add_argument('--log-path', dest='log_path', default=work_dir,
+    parser.add_argument('--log-path', dest='log_path', default=str(work_dir),
                         help='Path to store logs at in production')
     parser.add_argument('--daemonize', action='store_true', default=False,
                         help='Run the server as a daemon')
@@ -235,7 +250,7 @@ def parse_args(config):
     parser.add_argument('--engine', default=config['server']['engine'],
                         help='GPG engine path')
     parser.add_argument('--upload-path', dest='upload_path',
-                        default=os.path.join(work_dir, 'upload'),
+                        default=str(work_dir / 'upload'),
                         help='Upload path')
     parser.add_argument('--accepted-files', dest='accepted_files', nargs='*',
                         default=config['server']['files'].split(' '),
@@ -308,7 +323,7 @@ def main():
         ha1 = cherrypy.lib.auth_digest.get_ha1_dict_plain(auth)
 
     if args.debug:
-        server = 'Cherrypy/{}'.format(cherrypy.__version__)
+        server = f'Cherrypy/{cherrypy.__version__}'
     else:
         server = 'Cherrypy'
 
@@ -324,14 +339,15 @@ def main():
             'tools.auth_digest.key': str(auth_key)
         }
     }
+    log_path = Path(args.log_path)
     cherrypy.config.update({
         'server.max_request_body_size': 1000 * 1024 * 1024,
         'server.socket_host': bind_address,
         'server.socket_port': args.port,
         'request.show_tracebacks': args.debug,
         'log.screen': args.debug,
-        'log.access_file': '' if args.debug else os.path.join(args.log_path, 'access.log'),
-        'log.error_file': '' if args.debug else os.path.join(args.log_path, 'error.log'),
+        'log.access_file': '' if args.debug else str(log_path / 'access.log'),
+        'log.error_file': '' if args.debug else str(log_path / 'error.log'),
     })
 
     # Start the application and server daemon.

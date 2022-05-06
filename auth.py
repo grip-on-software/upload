@@ -1,5 +1,20 @@
 """
 Add, modify or delete client authentication.
+
+Copyright 2017-2020 ICTU
+Copyright 2017-2022 Leiden University
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 """
 
 import argparse
@@ -20,7 +35,7 @@ def ha1_nonce(username, realm, password):
     Create an encoded variant for the user's password in the realm.
     """
 
-    return md5_hex('%s:%s:%s' % (username, realm, password))
+    return md5_hex(f'{username}:{realm}:{password}')
 
 def parse_args(config):
     """
@@ -78,19 +93,19 @@ def main():
         exists = keyring.get_password(args.keyring, args.user)
         if args.delete:
             if exists:
-                raise KeyError('User {} already exists'.format(args.user))
+                raise KeyError(f'User {args.user} already exists')
 
             keyring.delete_password(args.realm, args.user)
         elif args.add:
             password = get_password(args)
             if exists:
-                raise KeyError('User {} already exists'.format(args.user))
+                raise KeyError(f'User {args.user} already exists')
 
             keyring.set_password(args.keyring, args.user, password)
         elif args.modify:
             password = get_password(args)
             if not exists:
-                raise KeyError('User {} does not exist'.format(args.user))
+                raise KeyError(f'User {args.user} does not exist')
 
             keyring.set_password(args.keyring, args.user, password)
 

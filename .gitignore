@@ -8,5 +8,5 @@ env
 *.cfg
 !.isort.cfg
 *.log
-
+env/
 data/
