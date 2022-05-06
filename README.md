@@ -16,10 +16,48 @@ Then install all Python dependencies using the following command:
 
 `pip install -r requirements.txt`
 
-## Running
+## Configuration
 
 Configure server settings in `upload.cfg` by copying `upload.cfg.example` and 
-replacing the variables with actual values.
+replacing the variables with actual values. The following configuration 
+sections and items are known:
+
+- `server`: Configuration of the listener server.
+  - `key`: Fingerprint of the GPG key pair to be used by the server to identify 
+    itself toward the uploaders.
+  - `engine`: Path to the GPG utility for GPG tasks, e.g. `/usr/bin/gpg2`.
+  - `files`: Space-separated list of file names that the server accepts in the
+    upload, for example `dump.sql.gz` to allow a database dump from the example
+    tasks of the `export-exchange` repository.
+  - `secret`: Secret string to use for the hash algorithm for the digest 
+    authentication to challenge the uploader to provide a known username and 
+    password in encrypted format.
+  - `keyring`: Name of the keyring in which authentication data is stored.
+  - `realm`: Name of the realm to use within the digest authentication.
+- `import`: Configuration of the file-specific import.
+  - `database`: The name of the database to import dumps into. Provided as 
+    a third parameter to the import script; ignored by the standard `import.sh` 
+    script since the database name is determined by the organizational user.
+  - `dump`: Name of the file that is considered for the import script. Other 
+    files do not trigger the import script.
+  - `path`: Path to the `monetdb-import` repository where further import 
+    scripts are located. The `Scripts` directory within this repository is used 
+    as working directory for the import script.
+  - `script`: Path to the script to run when a specific dump file is uploaded.
+- `client`: Accepted logins and public key names. Each item has a configuration 
+  key which has the login name of a uploader client, and the value is the name 
+  registered in the public key that the uploader must provide in order to be 
+  accepted.
+- `auth`: Accepted logins with usernames as keys and passwords as values in the 
+  configuration items. The usernames and passwords are imported to the keyring 
+  if possible, so that they can be removed from the configuration once imported 
+  (assuming the `secret` remains the same).
+- `symm`: Usernames and passphrases for symmetric decryption of uploaded data, 
+  respectively as keys and values in the configuration items. The usernames and 
+  passphrases are imported to the keyring if possible, so that they can be 
+  removed from the configuration once imported.
+
+## Running
 
 A `gros-uploader.service` file is provided for installing as a systemd service. 
 One can also use the `upload-session.sh` file to start the service within 

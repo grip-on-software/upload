@@ -57,7 +57,7 @@ class Upload:
 
     def _get_passphrase(self, hint, desc, prev_bad, hook=None):
         # pylint: disable=unused-argument
-        return keyring.get_password(self.args.keyring + '-secret', 'privkey')
+        return keyring.get_password(f'{self.args.keyring}-secret', 'privkey')
 
     @cherrypy.expose
     @cherrypy.tools.json_in()
@@ -148,7 +148,7 @@ class Upload:
                 name = name[:-len(self.PGP_ENCRYPT_SUFFIX)]
                 if self.args.keyring:
                     passphrase = \
-                        keyring.get_password(self.args.keyring + '-symmetric',
+                        keyring.get_password(f'{self.args.keyring}-symmetric',
                                              login)
                 else:
                     passphrase = self.config['symm'][login]
@@ -304,11 +304,11 @@ def main():
     auth = dict((str(key), str(value)) for key, value in config['auth'].items())
     symm = dict((str(key), str(value)) for key, value in config['symm'].items())
     if args.keyring:
-        auth_keyring = keyring.get_password(args.keyring + '-secret', 'server')
+        auth_keyring = keyring.get_password(f'{args.keyring}-secret', 'server')
         if auth_keyring is not None:
             auth_key = auth_keyring
         elif auth_key != '':
-            keyring.set_password(args.keyring + '-secret', 'server', auth_key)
+            keyring.set_password(f'{args.keyring}-secret', 'server', auth_key)
         else:
             raise ValueError('No server secret auth key provided')
 
@@ -316,7 +316,7 @@ def main():
             keyring.set_password(args.keyring, user,
                                  ha1_nonce(user, args.realm, password))
         for user, passphrase in symm.items():
-            keyring.set_password(args.keyring + '-symmetric', user, passphrase)
+            keyring.set_password(f'{args.keyring}-symmetric', user, passphrase)
 
         ha1 = get_ha1_keyring(args.keyring)
     else:
