@@ -33,7 +33,6 @@ from gpg_exchange import Exchange
 import keyring
 
 class Upload:
-    # pylint: disable=no-self-use
     """
     Upload listener.
     """

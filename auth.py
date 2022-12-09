@@ -84,10 +84,10 @@ def main():
     args = parse_args(config)
 
     if args.secret:
-        keyring.set_password(args.keyring + '-secret', 'server',
+        keyring.set_password(f'{args.keyring}-secret', 'server',
                              get_password(args, hashed=False, prompt='Secret key: '))
     elif args.private:
-        keyring.set_password(args.keyring + '-secret', 'privkey',
+        keyring.set_password(f'{args.keyring}-secret', 'privkey',
                              get_password(args, hashed=False, prompt='Passphrase: '))
     else:
         exists = keyring.get_password(args.keyring, args.user)
