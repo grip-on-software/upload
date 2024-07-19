@@ -20,6 +20,11 @@
 
 set -e
 
+if [ -z "$1" ]; then
+	echo "Usage: ./import.sh <organization> <date> [dbhost]" >&2
+	echo "Recreate database from dump.tar.gz import, with update and schema"
+fi
+
 ORGANIZATION=$1
 shift
 DATE=$1
@@ -42,12 +47,15 @@ fi
 DB="gros_$ORGANIZATION"
 cd "$IMPORTER/Scripts"
 
+# Create database
 python "recreate_database.py" --force --no-table-import --no-schema --keep-jenkins -h "$HOST" -d "$DB"
 
+# Extract dump file
 if [ ! -d "$DIRECTORY/dump" ]; then
 	tar --directory "$DIRECTORY" --no-same-owner --no-same-permissions -xzf "$DIRECTORY/dump.tar.gz"
 fi
 
+# Import table dumps from CSV/SQL files
 set +e
 "./import_tables.sh" "$HOST" "$DIRECTORY/dump/gros-$DATE" "$DB"
 status=$?
@@ -55,11 +63,16 @@ set -e
 if [ $status -ne 0 ]; then
 	echo "Failed to import all tables correctly" >&2
 else
+	# Update imported database to current state
 	python "update_database.py" -h "$HOST" -d "$DB"
 fi
 
-cp "$DIRECTORY/dump/tables-documentation.json" $SCHEMA
-cp "$DIRECTORY/dump/tables-schema.json" $SCHEMA
+# Export schema files for further publication/comparison
+if [ -d $SCHEMA ]; then
+	cp "$DIRECTORY/dump/tables-documentation.json" $SCHEMA
+	cp "$DIRECTORY/dump/tables-schema.json" $SCHEMA
+fi
 
+# Remove extracted directory
 rm -rf "$DIRECTORY/dump"
 exit $status
