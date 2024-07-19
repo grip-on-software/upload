@@ -18,32 +18,32 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import argparse
-import configparser
+from argparse import ArgumentParser, Namespace
+from configparser import RawConfigParser
 from getpass import getpass
 from hashlib import md5
 import keyring
 
-def md5_hex(nonce):
+def md5_hex(nonce: str) -> str:
     """
     Encode as MD5.
     """
 
     return md5(nonce.encode('ISO-8859-1')).hexdigest()
 
-def ha1_nonce(username, realm, password):
+def ha1_nonce(username: str, realm: str, password: str) -> str:
     """
     Create an encoded variant for the user's password in the realm.
     """
 
     return md5_hex(f'{username}:{realm}:{password}')
 
-def parse_args(config):
+def parse_args(config: RawConfigParser) -> Namespace:
     """
     Parse command line arguments.
     """
 
-    parser = argparse.ArgumentParser(description='Modify client authentication')
+    parser = ArgumentParser(description='Modify client authentication')
     options = parser.add_mutually_exclusive_group()
     options.add_argument('--add', action='store_true', help='Add new user')
     options.add_argument('--modify', action='store_true', help='Alter user')
@@ -62,7 +62,8 @@ def parse_args(config):
 
     return parser.parse_args()
 
-def get_password(args, hashed=True, prompt='New password: '):
+def get_password(args: Namespace, hashed: bool = True,
+                 prompt: str = 'New password: ') -> str:
     """
     Retrieve the password to be set.
     """
@@ -73,14 +74,14 @@ def get_password(args, hashed=True, prompt='New password: '):
 
         return ha1_nonce(args.user, args.realm, getpass(prompt))
 
-    return args.password if args.password is not None else getpass(prompt)
+    return str(args.password) if args.password is not None else getpass(prompt)
 
-def main():
+def main() -> None:
     """
     Main entry point.
     """
 
-    config = configparser.RawConfigParser()
+    config = RawConfigParser()
     config.read('upload.cfg')
     args = parse_args(config)
 

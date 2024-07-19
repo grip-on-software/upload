@@ -18,8 +18,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import argparse
-import configparser
+from argparse import ArgumentParser, Namespace
+from configparser import RawConfigParser
 import datetime
 from hashlib import md5
 import json
@@ -27,11 +27,18 @@ from pathlib import Path
 import shutil
 from subprocess import Popen
 import tempfile
+from typing import Any, BinaryIO, Callable, Dict, List, Optional, Union, \
+    TYPE_CHECKING
 import cherrypy
 import cherrypy.daemon
+from cherrypy._cpreqbody import Part
 import gpg
 from gpg_exchange import Exchange
 import keyring
+if TYPE_CHECKING:
+    from gpg_exchange.exchange import Passphrase
+else:
+    Passphrase = Any
 
 class Upload:
     """
@@ -44,7 +51,7 @@ class Upload:
     PGP_BINARY_MIME = "application/x-pgp-encrypted-binary"
     PGP_ENCRYPT_SUFFIX = ".gpg"
 
-    def __init__(self, args, config):
+    def __init__(self, args: Namespace, config: RawConfigParser):
         self.args = args
         self.config = config
 
@@ -53,16 +60,18 @@ class Upload:
         else:
             passphrase = None
 
-        self._gpg = Exchange(engine_path=self.args.engine, passphrase=passphrase)
+        self._gpg = Exchange(engine_path=self.args.engine,
+                             passphrase=passphrase)
 
-    def _get_passphrase(self, hint, desc, prev_bad, hook=None):
+    def _get_passphrase(self, hint: str, desc: str, prev_bad: int,
+                        hook: Optional[Any] = None) -> str:
         # pylint: disable=unused-argument
         return keyring.get_password(f'{self.args.keyring}-secret', 'privkey')
 
     @cherrypy.expose
     @cherrypy.tools.json_in()
     @cherrypy.tools.json_out()
-    def exchange(self):
+    def exchange(self) -> Dict[str, str]:
         """
         Exchange public keys.
         """
@@ -79,7 +88,7 @@ class Upload:
             try:
                 key = import_gpg.import_key(pubkey)[0]
                 login = cherrypy.request.login
-                if login != '' and self.config.has_option('client', login):
+                if login and self.config.has_option('client', login):
                     if key.uids[0].name != self.config.get('client', login):
                         raise ValueError('Public key must match client')
 
@@ -100,10 +109,16 @@ class Upload:
                                             always_trust=True)
 
         return {
-            'pubkey': str(ciphertext.decode('utf-8'))
+            'pubkey': ciphertext.decode('utf-8') \
+                if isinstance(ciphertext, bytes) else ciphertext
         }
 
-    def _upload_gpg_file(self, input_file, path, binary=None, passphrase=None):
+    def _upload_gpg_file(self, input_file: Optional[BinaryIO], path: Path,
+                         binary: Optional[bool] = None,
+                         passphrase: Optional[Passphrase] = None) -> None:
+        if input_file is None:
+            raise ValueError(f'No upload file for {path}')
+
         try:
             with open(path, 'wb') as output_file:
                 self._gpg.decrypt_file(input_file, output_file,
@@ -112,38 +127,60 @@ class Upload:
             # Write the (possibly encrypted) data to a separate file
             with open(f"{path}.enc", 'wb') as output_file:
                 input_file.seek(0)
-                buf = True
+                buf = b'\0'
                 while buf:
                     buf = input_file.read(1024)
                     if buf:
                         output_file.write(buf)
 
-            raise ValueError(f'Decryption failed: {error}') from error
+            raise ValueError(f'Decryption to {path} failed: {error}') from error
+
+    @staticmethod
+    def _extract_filename(index: int, upload_file: Part) -> str:
+        if upload_file.filename is None:
+            raise ValueError(f'No filename provided for file #{index}')
+
+        name = upload_file.filename.split('/')[-1]
+        if name == '':
+            raise ValueError(f'No name provided for file #{index}')
+
+        return name
+
+    @classmethod
+    def _extract_binary_mime(cls, upload_file: Part) -> Optional[bool]:
+        if upload_file.content_type is None:
+            return None
+
+        if upload_file.content_type.value == cls.PGP_ARMOR_MIME:
+            return False
+        if upload_file.content_type.value == cls.PGP_BINARY_MIME:
+            return True
+
+        return None
 
     @cherrypy.expose
     @cherrypy.tools.json_out()
-    def upload(self, files):
+    def upload(self, files: Optional[Union[Part, List[Part]]] = None) \
+            -> Dict[str, bool]:
         """
         Perform an upload and import of GPG-encrypted files from a client
         which has performed a key exchange.
         """
 
+        if files is None:
+            raise ValueError('Files required')
         if not isinstance(files, list):
             files = [files]
 
-        login = cherrypy.request.login
+        login = str(cherrypy.request.login)
         date = datetime.datetime.now().strftime('%Y-%m-%d')
         directory = Path(self.args.upload_path) / login / date
-        if not directory.exists():
-            directory.mkdir(mode=0o770, parents=True)
+        directory.mkdir(mode=0o770, parents=True, exist_ok=True)
 
         for index, upload_file in enumerate(files):
-            name = upload_file.filename.split('/')[-1]
+            name = self._extract_filename(index, upload_file)
             passphrase = None
-            binary = None
 
-            if name == '':
-                raise ValueError(f'No name provided for file #{index}')
             if name.endswith(self.PGP_ENCRYPT_SUFFIX):
                 name = name[:-len(self.PGP_ENCRYPT_SUFFIX)]
                 if self.args.keyring:
@@ -155,10 +192,7 @@ class Upload:
             if name not in self.args.accepted_files:
                 raise ValueError(f'File #{index}: name {name} is unacceptable')
 
-            if upload_file.content_type.value == self.PGP_ARMOR_MIME:
-                binary = False
-            elif upload_file.content_type.value == self.PGP_BINARY_MIME:
-                binary = True
+            binary = self._extract_binary_mime(upload_file)
 
             try:
                 self._upload_gpg_file(upload_file.file, directory / name,
@@ -166,7 +200,7 @@ class Upload:
             except ValueError as error:
                 raise ValueError(f'File {name}: {error}') from error
             if name == self.args.import_dump:
-                process_args = [
+                process_args: List[str] = [
                     '/bin/bash', self.args.import_script, login, date,
                     self.args.database
                 ]
@@ -179,7 +213,8 @@ class Upload:
         }
 
     @classmethod
-    def json_error(cls, status, message, traceback, version):
+    def json_error(cls, status: str, message: str, traceback: str,
+                   version: str) -> str:
         """
         Handle HTTP errors by formatting the exception details as JSON.
         """
@@ -195,17 +230,17 @@ class Upload:
             'version': {
                 'upload': cls.VERSION,
                 'cherrypy': version
-            } if cherrypy.request.show_tracebacks else None
+            } if cherrypy.request.show_tracebacks else {}
         })
 
-def get_ha1_keyring(name):
+def get_ha1_keyring(name: str) -> Callable[[str, str], str]:
     """
     Retrieve a function that provides an encoded variable containing the
     username, realm and password for digest authentication. The `name` is
     the keyring collection name.
     """
 
-    def get_ha1(_, username):
+    def get_ha1(_: str, username: str) -> str:
         """
         Retrieve the HA1 variable for a username from the keyring.
         """
@@ -214,27 +249,27 @@ def get_ha1_keyring(name):
 
     return get_ha1
 
-def md5_hex(nonce):
+def md5_hex(nonce: str) -> str:
     """
     Encode as MD5.
     """
 
     return md5(nonce.encode('ISO-8859-1')).hexdigest()
 
-def ha1_nonce(username, realm, password):
+def ha1_nonce(username: str, realm: str, password: str) -> str:
     """
     Create an encoded variant for the user's password in the realm.
     """
 
     return md5_hex(f'{username}:{realm}:{password}')
 
-def parse_args(config):
+def parse_args(config: RawConfigParser) -> Namespace:
     """
     Parse command line arguments.
     """
 
     work_dir = Path.cwd()
-    parser = argparse.ArgumentParser(description='Run upload listener')
+    parser = ArgumentParser(description='Run upload listener')
     parser.add_argument('--debug', action='store_true', default=False,
                         help='Output traces on web')
     parser.add_argument('--listen', default=None,
@@ -285,16 +320,16 @@ def parse_args(config):
 
     return parser.parse_args()
 
-def main():
+def main() -> None:
     """
     Main entry point.
     """
 
-    config = configparser.RawConfigParser()
+    config = RawConfigParser()
     config.read('upload.cfg')
     args = parse_args(config)
     if args.listen is not None:
-        bind_address = args.listen
+        bind_address = str(args.listen)
     elif args.debug:
         bind_address = '127.0.0.1'
     else:
@@ -304,21 +339,22 @@ def main():
     auth = dict((str(key), str(value)) for key, value in config['auth'].items())
     symm = dict((str(key), str(value)) for key, value in config['symm'].items())
     if args.keyring:
-        auth_keyring = keyring.get_password(f'{args.keyring}-secret', 'server')
+        keyring_name = str(args.keyring)
+        auth_keyring = keyring.get_password(f'{keyring_name}-secret', 'server')
         if auth_keyring is not None:
             auth_key = auth_keyring
         elif auth_key != '':
-            keyring.set_password(f'{args.keyring}-secret', 'server', auth_key)
+            keyring.set_password(f'{keyring_name}-secret', 'server', auth_key)
         else:
             raise ValueError('No server secret auth key provided')
 
         for user, password in auth.items():
-            keyring.set_password(args.keyring, user,
+            keyring.set_password(keyring_name, user,
                                  ha1_nonce(user, args.realm, password))
         for user, passphrase in symm.items():
-            keyring.set_password(f'{args.keyring}-symmetric', user, passphrase)
+            keyring.set_password(f'{keyring_name}-symmetric', user, passphrase)
 
-        ha1 = get_ha1_keyring(args.keyring)
+        ha1 = get_ha1_keyring(keyring_name)
     else:
         ha1 = cherrypy.lib.auth_digest.get_ha1_dict_plain(auth)
 

@@ -1,0 +1,3 @@
+from typing import Callable, Dict
+
+def get_ha1_dict_plain(auth: Dict[str, str]) -> Callable[[str, str], str]: ...

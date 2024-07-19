@@ -7,6 +7,14 @@
 env
 *.cfg
 !.isort.cfg
+!setup.cfg
 *.log
 env/
 data/
+
+# Typing coverage
+.mypy_cache/
+mypy-report/
+
+# Pylint
+pylint-report.txt
