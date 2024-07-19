@@ -94,21 +94,21 @@ def main() -> None:
     else:
         exists = keyring.get_password(args.keyring, args.user)
         if args.delete:
-            if exists:
-                raise KeyError(f'User {args.user} already exists')
-
-            keyring.delete_password(args.realm, args.user)
-        elif args.add:
-            password = get_password(args)
-            if exists:
-                raise KeyError(f'User {args.user} already exists')
-
-            keyring.set_password(args.keyring, args.user, password)
-        elif args.modify:
-            password = get_password(args)
             if not exists:
                 raise KeyError(f'User {args.user} does not exist')
 
+            keyring.delete_password(args.realm, args.user)
+        elif args.add:
+            if exists:
+                raise KeyError(f'User {args.user} already exists')
+
+            password = get_password(args)
+            keyring.set_password(args.keyring, args.user, password)
+        elif args.modify:
+            if not exists:
+                raise KeyError(f'User {args.user} does not exist')
+
+            password = get_password(args)
             keyring.set_password(args.keyring, args.user, password)
 
 if __name__ == "__main__":
