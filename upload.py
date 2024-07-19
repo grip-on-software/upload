@@ -359,9 +359,9 @@ def main() -> None:
         ha1 = cherrypy.lib.auth_digest.get_ha1_dict_plain(auth)
 
     if args.debug:
-        server = f'Cherrypy/{cherrypy.__version__}'
+        server = f'gros-upload/{Upload.VERSION} CherryPy/{cherrypy.__version__}'
     else:
-        server = 'Cherrypy'
+        server = 'gros-upload CherryPy'
 
     conf = {
         'global': {
