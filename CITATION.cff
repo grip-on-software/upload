@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+title: >-
+   Encrypted file upload server
+message: Please cite this software as follows.
+type: software
+authors:
+  - given-names: Leon
+    family-names: Helwerda
+    email: l.s.helwerda@liacs.leidenuniv.nl
+    affiliation: Leiden University
+    orcid: 'https://orcid.org/0000-0002-4299-466X'
+repository-code: 'https://github.com/grip-on-software/upload'
+url: 'https://gros.liacs.nl/'
+keywords:
+  - gpg-encryption
+  - database-importer
+  - secure-upload
+license: Apache-2.0
+version: 0.0.3

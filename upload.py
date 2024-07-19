@@ -38,7 +38,7 @@ class Upload:
     Upload listener.
     """
 
-    VERSION = "1"
+    VERSION = "0.0.3"
 
     PGP_ARMOR_MIME = "application/pgp-encrypted"
     PGP_BINARY_MIME = "application/x-pgp-encrypted-binary"
