@@ -1,9 +1,9 @@
 """
-Add, modify or delete client authentication.
+Subcommand to add, modify or delete client authentication.
 
 Copyright 2017-2020 ICTU
 Copyright 2017-2022 Leiden University
-Copyright 2017-2023 Leon Helwerda
+Copyright 2017-2024 Leon Helwerda
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,30 +21,15 @@ limitations under the License.
 from argparse import ArgumentParser, Namespace
 from configparser import RawConfigParser
 from getpass import getpass
-from hashlib import md5
 import keyring
+from .hash import ha1_nonce
 
-def md5_hex(nonce: str) -> str:
+def add_args(parser: ArgumentParser, config: RawConfigParser) -> None:
     """
-    Encode as MD5.
-    """
-
-    return md5(nonce.encode('ISO-8859-1')).hexdigest()
-
-def ha1_nonce(username: str, realm: str, password: str) -> str:
-    """
-    Create an encoded variant for the user's password in the realm.
+    Add command line arguments to an argument parser.
     """
 
-    return md5_hex(f'{username}:{realm}:{password}')
-
-def parse_args(config: RawConfigParser) -> Namespace:
-    """
-    Parse command line arguments.
-    """
-
-    parser = ArgumentParser(description='Modify client authentication')
-    options = parser.add_mutually_exclusive_group()
+    options = parser.add_mutually_exclusive_group(required=True)
     options.add_argument('--add', action='store_true', help='Add new user')
     options.add_argument('--modify', action='store_true', help='Alter user')
     options.add_argument('--delete', action='store_true', help='Remove user')
@@ -60,8 +45,6 @@ def parse_args(config: RawConfigParser) -> Namespace:
     parser.add_argument('--user', help='Username to modify')
     parser.add_argument('--password', help='New password or secret to set')
 
-    return parser.parse_args()
-
 def get_password(args: Namespace, hashed: bool = True,
                  prompt: str = 'New password: ') -> str:
     """
@@ -76,14 +59,10 @@ def get_password(args: Namespace, hashed: bool = True,
 
     return str(args.password) if args.password is not None else getpass(prompt)
 
-def main() -> None:
+def handle_command(args: Namespace) -> None:
     """
-    Main entry point.
+    Perform a modification to the authentication keyring.
     """
-
-    config = RawConfigParser()
-    config.read('upload.cfg')
-    args = parse_args(config)
 
     if args.secret:
         keyring.set_password(f'{args.keyring}-secret', 'server',
@@ -110,6 +89,3 @@ def main() -> None:
 
             password = get_password(args)
             keyring.set_password(args.keyring, args.user, password)
-
-if __name__ == "__main__":
-    main()

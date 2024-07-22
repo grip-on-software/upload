@@ -1,26 +1,56 @@
 # Encrypted file upload server
 
 This repository includes a service for running a HTTP server which accepts 
-uploads of GPG-encrypted files. The service uses a keychain to keep GPG 
-passphrases. Certain uploaded files can be used to import a database dump. 
-Usual deployment setups would host this service behind a reverse proxy such as 
-NGINX or Apache which handles SSL termination and access control.
+uploads of GPG-encrypted files. Although available as a package, it is mostly 
+meant to run as a standalone program or service. The application uses 
+a keychain to keep GPG passphrases which can be modified using a subcommand. 
+Certain uploaded files can be used to import a database dump. Usual deployment 
+setups would host this service behind a reverse proxy such as NGINX or Apache 
+which handles SSL termination and additional access control over the 
+Digest-based user authentication in this server.
 
-## Requirements
+## Installation
 
-A working version of the [GPG 
-exchange](https://github.com/lhelwerd/gpg-exchange) library is required. Follow 
-the instructions there to install the GPG dependencies.
+The [GPG exchange](https://github.com/lhelwerd/gpg-exchange) library is 
+required to be in a working state. Follow the instructions there to install the 
+GPG dependencies first. Then, to install the latest release version of the 
+packaged program from PyPI, run the following command:
 
-Then install all Python dependencies using the following command:
+```
+pip install gros-upload
+```
 
-`pip install -r requirements.txt`
 
 ## Configuration
 
-Configure server settings in `upload.cfg` by copying `upload.cfg.example` and 
-replacing the variables with actual values. The following configuration 
-sections and items are known:
+Configure server settings in `upload.cfg` by copying `upload.cfg.example` or 
+the example file below:
+```ini
+[server]
+key = $SERVER_KEY
+engine = $SERVER_ENGINE
+files = $SERVER_FILES
+secret = $SERVER_SECRET
+keyring = $SERVER_KEYRING
+realm = $SERVER_REALM
+
+[import]
+database = $IMPORT_DATABASE
+dump = $IMPORT_DUMP
+path = $IMPORT_PATH
+script = $IMPORT_SCRIPT
+
+[client]
+$CLIENT_ID=$CLIENT_NAME
+
+[auth]
+$CLIENT_ID=$CLIENT_AUTH
+
+[symm]
+$CLIENT_ID=$CLIENT_PASSPHRASE
+```
+Replace the variables with actual values. The following configuration sections 
+and items are known:
 
 - `server`: Configuration of the listener server.
   - `key`: Fingerprint of the GPG key pair to be used by the server to identify 
@@ -46,7 +76,7 @@ sections and items are known:
     Other files do not trigger the import script. The standard `import.sh` 
     script expects there to be a file called `dump.tar.gz`.
   - `path`: Path to the 
-    [monetdb-import]https://github.com/grip-on-software/monetdb-import) 
+    [monetdb-import](https://github.com/grip-on-software/monetdb-import) 
     repository where further import scripts are located. The `Scripts` 
     directory within this repository is used as working directory for the 
     import script.
@@ -69,10 +99,34 @@ sections and items are known:
 
 ## Running
 
+The upload server can be started directly using the following command:
+
+```
+gros-upload server
+```
+
+The subcommand takes various options that can be reviewed by using the 
+`gros-upload server --help` argument, including debugging instances and 
+different CGI deployment options. Uploads are stored beneath the "upload" 
+subdirectory structured of the current working directory.
+
 A `gros-uploader.service` file is provided for installing as a systemd service. 
 One can also use the `upload-session.sh` file to start the service within 
-a GNOME keyring context with pre-set virtual environments and arguments, or 
-directly use the `python upload.py` script to run the server. The script takes 
-various options that can be reviewed by using the `--help` argument, including 
-debugging instances. Uploads are stored beneath the "upload" subdirectory 
-structured of the current working directory.
+a GNOME keyring context, preset to store uploads in `/home/upload/upload` and 
+logs in `/var/log/upload`, using a `virtualenv` setup shared with the 
+[controller](https://gros.liacs.nl/data-gathering/api.html#controller-api) of 
+the agent-based data gathering setup. The script requires a password to unlock 
+the keyring. In combination with the service, a root user needs to input 
+a keyring password using a systemd Password Agent, for example by running the 
+`systemd-tty-ask-password-agent` command, before the server actually starts 
+under the `upload` user. Some pointers on the advanced setup can be found in 
+[installation](https://gros.liacs.nl/data-gathering/installation.html#controller) 
+of the controller environment.
+
+In order to adjust client authentication credentials, the subcommand 
+`gros-upload auth [--add|--modify|--delete] --user ... [--password ...]` may be 
+used. Additional arguments shown in `gros-upload auth --help` allow setting the 
+secret Digest token and the private key passphrase. Configuring credentials is 
+also possible for users and the Digest token using the `auth` section and 
+`secret` option of the `server` section in the [configuration](#configuration) 
+file, respectively.
