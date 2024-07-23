@@ -20,6 +20,11 @@ packaged program from PyPI, run the following command:
 pip install gros-upload
 ```
 
+Another option is to build the program from this repository, which allows using 
+the most recent development code. Run `make setup` to install the dependencies. 
+The upload server itself may then be installed with `make install`, which 
+places the package in your current environment. We recommend using a virtual 
+environment during development.
 
 ## Configuration
 

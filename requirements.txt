@@ -1,3 +1,3 @@
-cherrypy==18.9.0
+CherryPy==18.9.0
 gpg_exchange==0.0.7
 keyring==25.2.1
