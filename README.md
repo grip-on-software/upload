@@ -1,5 +1,14 @@
 # Encrypted file upload server
 
+[![PyPI](https://img.shields.io/pypi/v/gros-upload.svg)](https://pypi.python.org/pypi/gros-upload)
+[![Build 
+status](https://github.com/grip-on-software/upload/actions/workflows/upload-tests.yml/badge.svg)](https://github.com/grip-on-software/upload/actions/workflows/upload-tests.yml)
+[![Coverage 
+Status](https://coveralls.io/repos/github/grip-on-software/upload/badge.svg?branch=master)](https://coveralls.io/github/grip-on-software/upload?branch=master)
+[![Quality Gate
+Status](https://sonarcloud.io/api/project_badges/measure?project=grip-on-software_upload&metric=alert_status)](https://sonarcloud.io/project/overview?id=grip-on-software_upload)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.12784820.svg)](https://doi.org/10.5281/zenodo.12784820)
+
 This repository includes a service for running a HTTP server which accepts 
 uploads of GPG-encrypted files. Although available as a package, it is mostly 
 meant to run as a standalone program or service. The application uses 
@@ -135,3 +144,38 @@ secret Digest token and the private key passphrase. Configuring credentials is
 also possible for users and the Digest token using the `auth` section and 
 `secret` option of the `server` section in the [configuration](#configuration) 
 file, respectively.
+
+## Development and testing
+
+To run tests, first install the test dependencies with `make setup_test` which 
+also installs all dependencies for the upload server. Then `make coverage` 
+provides test results in the output and in XML versions compatible with, e.g., 
+JUnit and SonarQube available in the `test-reports/` directory. If you do not 
+need XML outputs, then run `make test` to just report on test successes and 
+failures or `make cover` to also have the terminal report on hits and misses in 
+statements and branches.
+
+[GitHub Actions](https://github.com/grip-on-software/upload/actions) is used to 
+run the unit tests and report on coverage on commits and pull requests. This 
+includes quality gate scans tracked by 
+[SonarCloud](https://sonarcloud.io/project/overview?id=grip-on-software_upload) 
+and [Coveralls](https://coveralls.io/github/grip-on-software/upload) for 
+coverage history.
+
+The Python module conforms to code style and typing standards which can be 
+checked using Pylint with `make pylint` and mypy with `make mypy`, after 
+installing the pylint and mypy dependencies using `make setup_analysis`; typing 
+reports are XML formats compatible with JUnit and SonarQube placed in the 
+`mypy-report/` directory. To also receive the HTML report, use `make mypy_html` 
+instead.
+
+We publish releases to [PyPI](https://pypi.org/project/gros-upload/) using 
+`make setup_release` to install dependencies and `make release` which performs 
+multiple checks: unit tests, typing, lint and version number consistency. The 
+release files are also published on 
+[GitHub](https://github.com/grip-on-software/upload/releases) and from there 
+are archived on [Zenodo](https://zenodo.org/doi/10.5281/zenodo.12784819).
+
+## License
+
+GROS encrypted file upload server is licensed under the Apache 2.0 License.
