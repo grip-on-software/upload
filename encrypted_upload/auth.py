@@ -64,28 +64,32 @@ def handle_command(args: Namespace) -> None:
     Perform a modification to the authentication keyring.
     """
 
+    domain = str(args.keyring)
     if args.secret:
-        keyring.set_password(f'{args.keyring}-secret', 'server',
-                             get_password(args, hashed=False, prompt='Secret key: '))
+        keyring.set_password(f'{domain}-secret', 'server',
+                             get_password(args, hashed=False,
+                                          prompt='Secret key: '))
     elif args.private:
-        keyring.set_password(f'{args.keyring}-secret', 'privkey',
-                             get_password(args, hashed=False, prompt='Passphrase: '))
+        keyring.set_password(f'{domain}-secret', 'privkey',
+                             get_password(args, hashed=False,
+                                          prompt='Passphrase: '))
     else:
-        exists = keyring.get_password(args.keyring, args.user)
+        user = str(args.user)
+        exists = keyring.get_password(domain, user)
         if args.delete:
             if not exists:
-                raise KeyError(f'User {args.user} does not exist')
+                raise KeyError(f'User {user} does not exist')
 
-            keyring.delete_password(args.realm, args.user)
+            keyring.delete_password(domain, user)
         elif args.add:
             if exists:
-                raise KeyError(f'User {args.user} already exists')
+                raise KeyError(f'User {user} already exists')
 
             password = get_password(args)
-            keyring.set_password(args.keyring, args.user, password)
+            keyring.set_password(domain, user, password)
         elif args.modify:
             if not exists:
-                raise KeyError(f'User {args.user} does not exist')
+                raise KeyError(f'User {user} does not exist')
 
             password = get_password(args)
-            keyring.set_password(args.keyring, args.user, password)
+            keyring.set_password(domain, user, password)

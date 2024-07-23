@@ -40,7 +40,7 @@ class Exchange:
     def _decrypt(self, ciphertext: gpg.Data, plaintext: gpg.Data,
                  passphrase: Optional[Passphrase] = None,
                  verify: bool = True) -> None: ...
-    def decrypt_text(self, data: str, passphrase: Optional[Passphrase] = None,
+    def decrypt_text(self, data: bytes, passphrase: Optional[Passphrase] = None,
                      verify: bool = True) -> Union[str, bytes]: ...
     def decrypt_file(self, input_file: IO, output_file: IO,
                      passphrase: Optional[Passphrase] = None,

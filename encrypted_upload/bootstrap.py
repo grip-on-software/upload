@@ -103,16 +103,16 @@ def bootstrap(config: RawConfigParser, args: Namespace) -> None:
     Set up the upload server.
     """
 
+    debug = bool(args.debug)
+    realm = str(args.realm)
     if args.listen is not None:
         bind_address = str(args.listen)
-    elif args.debug:
+    elif debug:
         bind_address = '127.0.0.1'
     else:
         bind_address = '0.0.0.0'
 
-    auth_key = config['server'].get('secret', '')
-    auth = dict((str(key), str(value)) for key, value in config['auth'].items())
-    symm = dict((str(key), str(value)) for key, value in config['symm'].items())
+    auth_key = str(config['server'].get('secret', ''))
     if args.keyring:
         keyring_name = str(args.keyring)
         auth_keyring = keyring.get_password(f'{keyring_name}-secret', 'server')
@@ -123,17 +123,17 @@ def bootstrap(config: RawConfigParser, args: Namespace) -> None:
         else:
             raise ValueError('No server secret auth key provided')
 
-        for user, password in auth.items():
+        for user, password in config['auth'].items():
             keyring.set_password(keyring_name, user,
-                                 ha1_nonce(user, args.realm, password))
-        for user, passphrase in symm.items():
+                                 ha1_nonce(user, realm, password))
+        for user, passphrase in config['symm'].items():
             keyring.set_password(f'{keyring_name}-symmetric', user, passphrase)
 
         ha1 = get_ha1_keyring(keyring_name)
     else:
-        ha1 = cherrypy.lib.auth_digest.get_ha1_dict_plain(auth)
+        ha1 = cherrypy.lib.auth_digest.get_ha1_dict_plain(dict(config['auth']))
 
-    if args.debug:
+    if debug:
         server = f'gros-upload/{VERSION} CherryPy/{cherrypy.__version__}'
     else:
         server = 'gros-upload CherryPy'
@@ -145,7 +145,7 @@ def bootstrap(config: RawConfigParser, args: Namespace) -> None:
             'error_page.default': Upload.json_error,
             'response.headers.server': server,
             'tools.auth_digest.on': True,
-            'tools.auth_digest.realm': str(args.realm),
+            'tools.auth_digest.realm': realm,
             'tools.auth_digest.get_ha1': ha1,
             'tools.auth_digest.key': str(auth_key)
         }
@@ -155,10 +155,10 @@ def bootstrap(config: RawConfigParser, args: Namespace) -> None:
         'server.max_request_body_size': 1000 * 1024 * 1024,
         'server.socket_host': bind_address,
         'server.socket_port': args.port,
-        'request.show_tracebacks': args.debug,
-        'log.screen': args.debug,
-        'log.access_file': '' if args.debug else str(log_path / 'access.log'),
-        'log.error_file': '' if args.debug else str(log_path / 'error.log'),
+        'request.show_tracebacks': debug,
+        'log.screen': debug,
+        'log.access_file': '' if debug else str(log_path / 'access.log'),
+        'log.error_file': '' if debug else str(log_path / 'error.log'),
     })
 
     # Start the application and server daemon.

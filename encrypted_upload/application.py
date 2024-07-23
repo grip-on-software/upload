@@ -52,10 +52,13 @@ class Upload:
         self.args = args
         self.config = config
 
-        if self.args.keyring and self.args.loopback:
-            passphrase = self._get_passphrase
-        else:
-            passphrase = None
+        self._keyring = ''
+        passphrase: Optional[Passphrase] = None
+
+        if self.args.keyring:
+            self._keyring = str(self.args.keyring)
+            if self.args.loopback:
+                passphrase = self._get_passphrase
 
         self._gpg = Exchange(engine_path=self.args.engine,
                              passphrase=passphrase)
@@ -63,7 +66,7 @@ class Upload:
     def _get_passphrase(self, hint: str, desc: str, prev_bad: int,
                         hook: Optional[Any] = None) -> str:
         # pylint: disable=unused-argument
-        return keyring.get_password(f'{self.args.keyring}-secret', 'privkey')
+        return keyring.get_password(f'{self._keyring}-secret', 'privkey')
 
     @cherrypy.expose
     @cherrypy.tools.json_in()
@@ -180,9 +183,9 @@ class Upload:
 
             if name.endswith(self.PGP_ENCRYPT_SUFFIX):
                 name = name[:-len(self.PGP_ENCRYPT_SUFFIX)]
-                if self.args.keyring:
+                if self._keyring:
                     passphrase = \
-                        keyring.get_password(f'{self.args.keyring}-symmetric',
+                        keyring.get_password(f'{self._keyring}-symmetric',
                                              login)
                 else:
                     passphrase = self.config['symm'][login]
