@@ -1,0 +1,2 @@
+class GpgError(Exception):
+    pass

@@ -1,0 +1,60 @@
+[project]
+name = "gros-upload"
+version = "0.0.3"
+description = "Encrypted file upload server"
+readme = "README.md"
+authors = [{name = "Leon Helwerda", email = "l.s.helwerda@liacs.leidenuniv.nl"}]
+license = {text = "Apache 2.0"}
+requires-python = ">=3.8"
+dependencies = [
+    "CherryPy==18.9.0",
+    "gpg_exchange==0.0.7",
+    "keyring==25.2.1"
+]
+classifiers=[
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "Topic :: Communications",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Topic :: Security :: Cryptography",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+keywords = ["gpg encryption", "database importer", "secure upload"]
+
+[project.scripts]
+gros-upload = "encrypted_upload.__main__:main"
+
+[project.urls]
+"Homepage" = "https://gros.liacs.nl"
+"PyPI" = "https://pypi.python.org/pypi/gros-upload"
+"Source Code" = "https://github.com/grip-on-software/upload"
+"Issues" = "https://github.com/grip-on-software/upload/issues"
+"Pull Requests" = "https://github.com/grip-on-software/upload/pulls"
+"CI: GitHub Actions" = "https://github.com/grip-on-software/upload/actions"
+"CI: Coveralls" = "https://coveralls.io/github/grip-on-software/upload?branch=master"
+"CI: SonarCloud" = "https://sonarcloud.io/project/overview?id=grip-on-software_upload"
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["encrypted_upload"]
+
+[tool.setuptools.package-data]
+"encrypted_upload" = ["py.typed"]
+
+[tool.mypy]
+mypy_path = "typeshed"
+
+[tool.pytest.ini_options]
+testpaths = "test"
+python_files = "*.py"

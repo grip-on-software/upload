@@ -1,9 +1,9 @@
 """
-Add, modify or delete client authentication.
+Subcommand to add, modify or delete client authentication.
 
 Copyright 2017-2020 ICTU
 Copyright 2017-2022 Leiden University
-Copyright 2017-2023 Leon Helwerda
+Copyright 2017-2024 Leon Helwerda
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,33 +18,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import argparse
-import configparser
+from argparse import ArgumentParser, Namespace
+from configparser import RawConfigParser
 from getpass import getpass
-from hashlib import md5
 import keyring
+from .hash import ha1_nonce
 
-def md5_hex(nonce):
+def add_args(parser: ArgumentParser, config: RawConfigParser) -> None:
     """
-    Encode as MD5.
-    """
-
-    return md5(nonce.encode('ISO-8859-1')).hexdigest()
-
-def ha1_nonce(username, realm, password):
-    """
-    Create an encoded variant for the user's password in the realm.
+    Add command line arguments to an argument parser.
     """
 
-    return md5_hex(f'{username}:{realm}:{password}')
-
-def parse_args(config):
-    """
-    Parse command line arguments.
-    """
-
-    parser = argparse.ArgumentParser(description='Modify client authentication')
-    options = parser.add_mutually_exclusive_group()
+    options = parser.add_mutually_exclusive_group(required=True)
     options.add_argument('--add', action='store_true', help='Add new user')
     options.add_argument('--modify', action='store_true', help='Alter user')
     options.add_argument('--delete', action='store_true', help='Remove user')
@@ -60,9 +45,8 @@ def parse_args(config):
     parser.add_argument('--user', help='Username to modify')
     parser.add_argument('--password', help='New password or secret to set')
 
-    return parser.parse_args()
-
-def get_password(args, hashed=True, prompt='New password: '):
+def get_password(args: Namespace, hashed: bool = True,
+                 prompt: str = 'New password: ') -> str:
     """
     Retrieve the password to be set.
     """
@@ -73,42 +57,31 @@ def get_password(args, hashed=True, prompt='New password: '):
 
         return ha1_nonce(args.user, args.realm, getpass(prompt))
 
-    return args.password if args.password is not None else getpass(prompt)
+    return str(args.password) if args.password is not None else getpass(prompt)
 
-def main():
+def handle_command(args: Namespace) -> None:
     """
-    Main entry point.
+    Perform a modification to the authentication keyring.
     """
 
-    config = configparser.RawConfigParser()
-    config.read('upload.cfg')
-    args = parse_args(config)
-
+    domain = str(args.keyring)
     if args.secret:
-        keyring.set_password(f'{args.keyring}-secret', 'server',
-                             get_password(args, hashed=False, prompt='Secret key: '))
+        keyring.set_password(f'{domain}-secret', 'server',
+                             get_password(args, hashed=False,
+                                          prompt='Secret key: '))
     elif args.private:
-        keyring.set_password(f'{args.keyring}-secret', 'privkey',
-                             get_password(args, hashed=False, prompt='Passphrase: '))
+        keyring.set_password(f'{domain}-secret', 'privkey',
+                             get_password(args, hashed=False,
+                                          prompt='Passphrase: '))
     else:
-        exists = keyring.get_password(args.keyring, args.user)
+        user = str(args.user)
+        exists = keyring.get_password(domain, user)
+        if args.add == bool(exists):
+            raise KeyError(f'"{user}" {"must" if exists else "does"} not exist')
+
         if args.delete:
-            if exists:
-                raise KeyError(f'User {args.user} already exists')
-
-            keyring.delete_password(args.realm, args.user)
-        elif args.add:
+            keyring.delete_password(domain, user)
+        else:
+            # Add or modify (after existence check)
             password = get_password(args)
-            if exists:
-                raise KeyError(f'User {args.user} already exists')
-
-            keyring.set_password(args.keyring, args.user, password)
-        elif args.modify:
-            password = get_password(args)
-            if not exists:
-                raise KeyError(f'User {args.user} does not exist')
-
-            keyring.set_password(args.keyring, args.user, password)
-
-if __name__ == "__main__":
-    main()
+            keyring.set_password(domain, user, password)

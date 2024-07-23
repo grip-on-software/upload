@@ -7,6 +7,45 @@
 env
 *.cfg
 !.isort.cfg
+!setup.cfg
 *.log
-env/
+
+# Uploaded data
 data/
+upload/
+
+# Pip installation
+src/*/
+src/pip-delete-this-directory.txt
+
+# Distribution / packaging
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+!typeshed/*/lib
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Typing coverage
+.mypy_cache/
+mypy-report/
+
+# Pylint
+pylint-report.txt
+
+# Unit tests and coverage
+.coverage
+htmlcov/
+test-reports/
