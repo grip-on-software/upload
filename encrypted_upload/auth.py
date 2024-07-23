@@ -76,20 +76,12 @@ def handle_command(args: Namespace) -> None:
     else:
         user = str(args.user)
         exists = keyring.get_password(domain, user)
+        if args.add == bool(exists):
+            raise KeyError(f'"{user}" {"must" if exists else "does"} not exist')
+
         if args.delete:
-            if not exists:
-                raise KeyError(f'User {user} does not exist')
-
             keyring.delete_password(domain, user)
-        elif args.add:
-            if exists:
-                raise KeyError(f'User {user} already exists')
-
-            password = get_password(args)
-            keyring.set_password(domain, user, password)
-        elif args.modify:
-            if not exists:
-                raise KeyError(f'User {user} does not exist')
-
+        else:
+            # Add or modify (after existence check)
             password = get_password(args)
             keyring.set_password(domain, user, password)

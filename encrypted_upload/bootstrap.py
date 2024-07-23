@@ -98,13 +98,31 @@ def add_args(parser: ArgumentParser, config: RawConfigParser) -> None:
     server.add_argument('--cgi', action='store_true', default=False,
                         help='Start a CGI server instead of HTTP')
 
+def _update_keyring(config: RawConfigParser, args: Namespace,
+                    auth_key: str) -> str:
+    keyring_name = str(args.keyring)
+    auth_keyring = keyring.get_password(f'{keyring_name}-secret', 'server')
+    if auth_keyring is not None:
+        auth_key = auth_keyring
+    elif auth_key != '':
+        keyring.set_password(f'{keyring_name}-secret', 'server', auth_key)
+    else:
+        raise ValueError('No server secret auth key provided')
+
+    for user, password in config['auth'].items():
+        keyring.set_password(keyring_name, user,
+                             ha1_nonce(user, str(args.realm), password))
+    for user, passphrase in config['symm'].items():
+        keyring.set_password(f'{keyring_name}-symmetric', user, passphrase)
+
+    return auth_key
+
 def bootstrap(config: RawConfigParser, args: Namespace) -> None:
     """
     Set up the upload server.
     """
 
     debug = bool(args.debug)
-    realm = str(args.realm)
     if args.listen is not None:
         bind_address = str(args.listen)
     elif debug:
@@ -114,22 +132,8 @@ def bootstrap(config: RawConfigParser, args: Namespace) -> None:
 
     auth_key = str(config['server'].get('secret', ''))
     if args.keyring:
-        keyring_name = str(args.keyring)
-        auth_keyring = keyring.get_password(f'{keyring_name}-secret', 'server')
-        if auth_keyring is not None:
-            auth_key = auth_keyring
-        elif auth_key != '':
-            keyring.set_password(f'{keyring_name}-secret', 'server', auth_key)
-        else:
-            raise ValueError('No server secret auth key provided')
-
-        for user, password in config['auth'].items():
-            keyring.set_password(keyring_name, user,
-                                 ha1_nonce(user, realm, password))
-        for user, passphrase in config['symm'].items():
-            keyring.set_password(f'{keyring_name}-symmetric', user, passphrase)
-
-        ha1 = get_ha1_keyring(keyring_name)
+        auth_key = _update_keyring(config, args, auth_key)
+        ha1 = get_ha1_keyring(args.keyring)
     else:
         ha1 = cherrypy.lib.auth_digest.get_ha1_dict_plain(dict(config['auth']))
 
@@ -145,7 +149,7 @@ def bootstrap(config: RawConfigParser, args: Namespace) -> None:
             'error_page.default': Upload.json_error,
             'response.headers.server': server,
             'tools.auth_digest.on': True,
-            'tools.auth_digest.realm': realm,
+            'tools.auth_digest.realm': str(args.realm),
             'tools.auth_digest.get_ha1': ha1,
             'tools.auth_digest.key': str(auth_key)
         }

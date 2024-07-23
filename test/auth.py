@@ -85,7 +85,7 @@ class AuthTest(unittest.TestCase):
         handle_command(args)
         delete_password.assert_called_once_with('$SERVER_KEYRING', 'user')
         get.return_value = None
-        with self.assertRaises(KeyError):
+        with self.assertRaisesRegex(KeyError, '"user" does not exist'):
             handle_command(args)
 
         args = self.parser.parse_args([
@@ -96,7 +96,7 @@ class AuthTest(unittest.TestCase):
         set_password.assert_called_once_with('ring', 'user',
                                              ha1_nonce('user', 'ex', 'mypass'))
         get.return_value = 'mypass'
-        with self.assertRaises(KeyError):
+        with self.assertRaisesRegex(KeyError, '"user" must not exist'):
             handle_command(args)
 
         set_password.reset_mock()
@@ -108,7 +108,7 @@ class AuthTest(unittest.TestCase):
         set_password.assert_called_once_with('domain', 'user',
                                              ha1_nonce('user', 'ex', 'newpass'))
         get.return_value = None
-        with self.assertRaises(KeyError):
+        with self.assertRaisesRegex(KeyError, '"user" does not exist'):
             handle_command(args)
 
         set_password.reset_mock()

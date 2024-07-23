@@ -206,6 +206,7 @@ class Upload:
                 ]
                 path = Path(self.args.import_path) / 'Scripts'
                 with Popen(process_args, stdout=None, stderr=None, cwd=path):
+                    # Let the import process run but no longer care about it.
                     pass
 
         return {
